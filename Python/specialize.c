@@ -1,6 +1,7 @@
 
 #include "Python.h"
 #include "pycore_code.h"
+#include "pycore_frame.h"
 #include "pycore_dict.h"
 #include "pycore_long.h"
 #include "pycore_moduleobject.h"
@@ -119,6 +120,7 @@ _Py_GetSpecializationStats(void) {
         return NULL;
     }
     int err = 0;
+    err += add_stat_dict(stats, CALL_FUNCTION, "call_function");
     err += add_stat_dict(stats, LOAD_ATTR, "load_attr");
     err += add_stat_dict(stats, LOAD_GLOBAL, "load_global");
     err += add_stat_dict(stats, LOAD_METHOD, "load_method");
@@ -175,6 +177,7 @@ _Py_PrintSpecializationStats(void)
 #else
     fprintf(out, "Specialization stats:\n");
 #endif
+    print_stats(out, &_specialization_stats[CALL_FUNCTION], "call_function");
     print_stats(out, &_specialization_stats[LOAD_ATTR], "load_attr");
     print_stats(out, &_specialization_stats[LOAD_GLOBAL], "load_global");
     print_stats(out, &_specialization_stats[LOAD_METHOD], "load_method");
@@ -225,6 +228,7 @@ get_cache_count(SpecializedCacheOrInstruction *quickened) {
 /* Map from opcode to adaptive opcode.
   Values of zero are ignored. */
 static uint8_t adaptive_opcodes[256] = {
+    [CALL_FUNCTION] = CALL_FUNCTION_ADAPTIVE,
     [LOAD_ATTR] = LOAD_ATTR_ADAPTIVE,
     [LOAD_GLOBAL] = LOAD_GLOBAL_ADAPTIVE,
     [LOAD_METHOD] = LOAD_METHOD_ADAPTIVE,
@@ -235,6 +239,7 @@ static uint8_t adaptive_opcodes[256] = {
 
 /* The number of cache entries required for a "family" of instructions. */
 static uint8_t cache_requirements[256] = {
+    [CALL_FUNCTION] = 1,
     [LOAD_ATTR] = 2, /* _PyAdaptiveEntry and _PyAttrCache */
     [LOAD_GLOBAL] = 2, /* _PyAdaptiveEntry and _PyLoadGlobalCache */
     [LOAD_METHOD] = 3, /* _PyAdaptiveEntry, _PyAttrCache and _PyObjectCache */
@@ -450,6 +455,17 @@ _Py_Quicken(PyCodeObject *code) {
 
 #define SPEC_FAIL_NON_FUNCTION_SCOPE 11
 #define SPEC_FAIL_DIFFERENT_TYPES 12
+
+/* Calls */
+
+#define SPEC_FAIL_C_FUNCTION_O 11
+#define SPEC_FAIL_C_FUNCTION_FAST_2 12
+#define SPEC_FAIL_C_FUNCTION_FAST 13
+#define SPEC_FAIL_C_FUNCTION_OTHER 14
+#define SPEC_FAIL_TYPE_1 15
+#define SPEC_FAIL_CLASS 16
+#define SPEC_FAIL_PY_FUNCTION_SIMPLE 17
+#define SPEC_FAIL_PY_FUNCTION_COMPLEX 18
 
 
 static int
@@ -1196,5 +1212,88 @@ fail:
 success:
     STAT_INC(BINARY_ADD, specialization_success);
     assert(!PyErr_Occurred());
+    return 0;
+}
+
+static int specialize_c_call(
+    PyObject *callable, int nargs, _Py_CODEUNIT *instr, SpecializedCacheEntry *cache)
+{
+    int flags = ((PyCFunctionObject *)callable)->m_ml->ml_flags;
+    if (flags & METH_O) {
+        SPECIALIZATION_FAIL(CALL_FUNCTION, SPEC_FAIL_C_FUNCTION_O);
+    }
+    else if ((flags & (METH_FASTCALL | METH_KEYWORDS)) == METH_FASTCALL) {
+        if (nargs == 2) {
+            SPECIALIZATION_FAIL(CALL_FUNCTION, SPEC_FAIL_C_FUNCTION_FAST_2);
+        }
+        else {
+            SPECIALIZATION_FAIL(CALL_FUNCTION, SPEC_FAIL_C_FUNCTION_FAST);
+        }
+    }
+    else {
+        SPECIALIZATION_FAIL(CALL_FUNCTION, SPEC_FAIL_C_FUNCTION_OTHER);
+    }
+    return -1;
+}
+
+static int specialize_type_call(
+    PyObject *callable, int nargs, _Py_CODEUNIT *instr, SpecializedCacheEntry *cache)
+{
+    if (callable == (PyObject *)&PyType_Type && nargs == 1) {
+        SPECIALIZATION_FAIL(CALL_FUNCTION, SPEC_FAIL_TYPE_1);
+    }
+    else {
+        SPECIALIZATION_FAIL(CALL_FUNCTION, SPEC_FAIL_CLASS);
+    }
+    return -1;
+}
+
+static int specialize_py_call(PyThreadState *tstate,
+    PyObject *callable, int nargs, _Py_CODEUNIT *instr, SpecializedCacheEntry *cache)
+{
+    PyCodeObject *code = (PyCodeObject *)((PyFunctionObject *)callable)->func_code;
+    if (nargs == code->co_argcount &&
+        (code->co_flags & (CO_VARARGS | CO_VARKEYWORDS)) == 0) {
+        SPECIALIZATION_FAIL(CALL_FUNCTION, SPEC_FAIL_PY_FUNCTION_SIMPLE);
+    }
+    else {
+        SPECIALIZATION_FAIL(CALL_FUNCTION, SPEC_FAIL_PY_FUNCTION_COMPLEX);
+    }
+    return -1;
+}
+
+int
+_Py_Specialize_CallFunction(
+    PyThreadState *tstate, PyObject *callable, int nargs,
+    _Py_CODEUNIT *instr, SpecializedCacheEntry *cache)
+{
+    _PyAdaptiveEntry *cache0 = &cache->adaptive;
+#if SPECIALIZATION_STATS
+    PyTypeObject *type = Py_TYPE(callable);
+#endif
+    int fail;
+    if (PyCFunction_CheckExact(callable)) {
+        fail = specialize_c_call(callable, nargs, instr, cache);
+    }
+    else if (PyFunction_Check(callable)) {
+        fail = specialize_py_call(tstate, callable, nargs, instr, cache);
+    }
+    else if (PyType_Check(callable)) {
+        fail = specialize_type_call(callable, nargs, instr, cache);
+    }
+    else {
+        SPECIALIZATION_FAIL(CALL_FUNCTION, SPEC_FAIL_OTHER);
+        fail = -1;
+    }
+    if (fail) {
+        STAT_INC(CALL_FUNCTION, specialization_failure);
+        assert(!PyErr_Occurred());
+        cache_backoff(cache0);
+    }
+    else {
+        STAT_INC(CALL_FUNCTION, specialization_success);
+        assert(!PyErr_Occurred());
+        cache0->counter = saturating_start();
+    }
     return 0;
 }

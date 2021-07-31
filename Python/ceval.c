@@ -4597,6 +4597,7 @@ check_eval_breaker:
 
         TARGET(CALL_FUNCTION): {
             PREDICTED(CALL_FUNCTION);
+            STAT_INC(CALL_FUNCTION, unquickened);
             PyObject **sp, *res;
             sp = stack_pointer;
             res = call_function(tstate, &sp, oparg, NULL, cframe.use_tracing);
@@ -4607,6 +4608,27 @@ check_eval_breaker:
             }
             CHECK_EVAL_BREAKER();
             DISPATCH();
+        }
+
+        TARGET(CALL_FUNCTION_ADAPTIVE): {
+            assert(cframe.use_tracing == 0);
+            SpecializedCacheEntry *cache = GET_CACHE();
+            if (cache->adaptive.counter == 0) {
+                int nargs = cache->adaptive.original_oparg;
+                PyObject *callable = PEEK(nargs+1);
+                next_instr--;
+                if (_Py_Specialize_CallFunction(tstate, callable, nargs, next_instr, cache) < 0) {
+                    goto error;
+                }
+                DISPATCH();
+            }
+            else {
+                STAT_INC(CALL_FUNCTION, deferred);
+                cache->adaptive.counter--;
+                oparg = cache->adaptive.original_oparg;
+                STAT_DEC(CALL_FUNCTION, unquickened);
+                JUMP_TO_INSTRUCTION(CALL_FUNCTION);
+            }
         }
 
         TARGET(CALL_FUNCTION_KW): {
@@ -4854,6 +4876,7 @@ opname ## _miss: \
         JUMP_TO_INSTRUCTION(opname); \
     }
 
+MISS_WITH_CACHE(CALL_FUNCTION)
 MISS_WITH_CACHE(LOAD_ATTR)
 MISS_WITH_CACHE(STORE_ATTR)
 MISS_WITH_CACHE(LOAD_GLOBAL)
