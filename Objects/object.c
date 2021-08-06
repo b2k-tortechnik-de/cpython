@@ -1767,7 +1767,7 @@ PyTypeObject _PyNotImplemented_Type = {
 
 PyObject _Py_NotImplementedStruct = {
     _PyObject_EXTRA_INIT
-    1, &_PyNotImplemented_Type
+    REFCOUNT_QUANTUM, &_PyNotImplemented_Type
 };
 
 PyStatus

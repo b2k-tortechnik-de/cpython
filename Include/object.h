@@ -52,6 +52,9 @@ A standard interface exists for objects that contain an array of items
 whose size is determined when the object is allocated.
 */
 
+#define REFCOUNT_OFFSET 4
+#define REFCOUNT_QUANTUM (1 << REFCOUNT_OFFSET)
+
 /* Py_DEBUG implies Py_REF_DEBUG. */
 #if defined(Py_DEBUG) && !defined(Py_REF_DEBUG)
 #  define Py_REF_DEBUG
@@ -83,7 +86,7 @@ typedef struct _typeobject PyTypeObject;
 
 #define PyObject_HEAD_INIT(type)        \
     { _PyObject_EXTRA_INIT              \
-    1, type },
+    REFCOUNT_QUANTUM, type },
 
 #define PyVarObject_HEAD_INIT(type, size)       \
     { PyObject_HEAD_INIT(type) size },
@@ -126,9 +129,8 @@ typedef struct {
 PyAPI_FUNC(int) Py_Is(PyObject *x, PyObject *y);
 #define Py_Is(x, y) ((x) == (y))
 
-
 static inline Py_ssize_t _Py_REFCNT(const PyObject *ob) {
-    return ob->ob_refcnt;
+    return ob->ob_refcnt >> REFCOUNT_OFFSET;
 }
 #define Py_REFCNT(ob) _Py_REFCNT(_PyObject_CAST_CONST(ob))
 
@@ -149,7 +151,7 @@ static inline int _Py_IS_TYPE(const PyObject *ob, const PyTypeObject *type) {
 
 
 static inline void _Py_SET_REFCNT(PyObject *ob, Py_ssize_t refcnt) {
-    ob->ob_refcnt = refcnt;
+    ob->ob_refcnt = refcnt << REFCOUNT_OFFSET;
 }
 #define Py_SET_REFCNT(ob, refcnt) _Py_SET_REFCNT(_PyObject_CAST(ob), refcnt)
 
@@ -472,7 +474,7 @@ static inline void _Py_INCREF(PyObject *op)
 #ifdef Py_REF_DEBUG
     _Py_RefTotal++;
 #endif
-    op->ob_refcnt++;
+    op->ob_refcnt += REFCOUNT_QUANTUM;
 #endif
 }
 #define Py_INCREF(op) _Py_INCREF(_PyObject_CAST(op))
@@ -492,14 +494,13 @@ static inline void _Py_DECREF(
 #ifdef Py_REF_DEBUG
     _Py_RefTotal--;
 #endif
-    if (--op->ob_refcnt != 0) {
+    op->ob_refcnt -= REFCOUNT_QUANTUM;
+    if (op->ob_refcnt < REFCOUNT_QUANTUM) {
 #ifdef Py_REF_DEBUG
         if (op->ob_refcnt < 0) {
             _Py_NegativeRefcount(filename, lineno, op);
         }
 #endif
-    }
-    else {
         _Py_Dealloc(op);
     }
 #endif
