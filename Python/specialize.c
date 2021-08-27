@@ -458,14 +458,14 @@ _Py_Quicken(PyCodeObject *code) {
 
 /* Calls */
 
-#define SPEC_FAIL_C_FUNCTION_O 11
-#define SPEC_FAIL_C_FUNCTION_FAST_2 12
-#define SPEC_FAIL_C_FUNCTION_FAST 13
-#define SPEC_FAIL_C_FUNCTION_OTHER 14
-#define SPEC_FAIL_TYPE_1 15
-#define SPEC_FAIL_CLASS 16
-#define SPEC_FAIL_PY_FUNCTION_SIMPLE 17
-#define SPEC_FAIL_PY_FUNCTION_COMPLEX 18
+#define SPEC_FAIL_C_FUNCTION_O 12
+#define SPEC_FAIL_C_FUNCTION_FAST_2 13
+#define SPEC_FAIL_C_FUNCTION_FAST 14
+#define SPEC_FAIL_C_FUNCTION_OTHER 15
+#define SPEC_FAIL_TYPE_1 16
+#define SPEC_FAIL_CLASS 17
+#define SPEC_FAIL_PY_FUNCTION_SIMPLE 18
+#define SPEC_FAIL_PY_FUNCTION_COMPLEX 19
 
 
 static int
@@ -1280,6 +1280,10 @@ _Py_Specialize_CallFunction(
     }
     else if (PyType_Check(callable)) {
         fail = specialize_type_call(callable, nargs, instr, cache);
+    }
+    else if (PyMethod_Check(callable)) {
+        SPECIALIZATION_FAIL(CALL_FUNCTION, SPEC_FAIL_METHOD);
+        fail = -1;
     }
     else {
         SPECIALIZATION_FAIL(CALL_FUNCTION, SPEC_FAIL_OTHER);
