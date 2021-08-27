@@ -458,12 +458,15 @@ _Py_Quicken(PyCodeObject *code) {
 
 /* Calls */
 
+#define SPEC_FAIL_TYPE_1 8
+#define SPEC_FAIL_CLASS 9
+/* SPEC_FAIL_METHOD  defined above */
 #define SPEC_FAIL_C_FUNCTION_O 12
 #define SPEC_FAIL_C_FUNCTION_FAST_2 13
 #define SPEC_FAIL_C_FUNCTION_FAST 14
 #define SPEC_FAIL_C_FUNCTION_OTHER 15
-#define SPEC_FAIL_TYPE_1 16
-#define SPEC_FAIL_CLASS 17
+#define SPEC_FAIL_LEN 16
+#define SPEC_FAIL_ISINSTANCE 17
 #define SPEC_FAIL_PY_FUNCTION_SIMPLE 18
 #define SPEC_FAIL_PY_FUNCTION_COMPLEX 19
 
@@ -1218,8 +1221,17 @@ success:
 static int specialize_c_call(
     PyObject *callable, int nargs, _Py_CODEUNIT *instr, SpecializedCacheEntry *cache)
 {
-    int flags = ((PyCFunctionObject *)callable)->m_ml->ml_flags;
-    if (flags & METH_O) {
+    PyMethodDef *mdef = ((PyCFunctionObject *)callable)->m_ml;
+    int flags = mdef->ml_flags;
+    /* We are just checking the name here.
+     * This would be wrong fro specialization, but is good enough for stats. */
+    if (strcmp(mdef->ml_name, "len") == 0) {
+        SPECIALIZATION_FAIL(CALL_FUNCTION, SPEC_FAIL_LEN);
+    }
+    else if (strcmp(mdef->ml_name, "isinstance") == 0) {
+        SPECIALIZATION_FAIL(CALL_FUNCTION, SPEC_FAIL_ISINSTANCE);
+    }
+    else if (flags & METH_O) {
         SPECIALIZATION_FAIL(CALL_FUNCTION, SPEC_FAIL_C_FUNCTION_O);
     }
     else if ((flags & (METH_FASTCALL | METH_KEYWORDS)) == METH_FASTCALL) {
