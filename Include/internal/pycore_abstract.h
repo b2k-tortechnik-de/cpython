@@ -16,6 +16,9 @@ _PyIndex_Check(PyObject *obj)
     return (tp_as_number != NULL && tp_as_number->nb_index != NULL);
 }
 
+PyObject *
+_Py_BinaryOp(PyObject *v, PyObject *w, const int slotn);
+
 #ifdef __cplusplus
 }
 #endif

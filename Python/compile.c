@@ -21,6 +21,7 @@
  * objects.
  */
 
+#include <stddef.h>
 #include <stdbool.h>
 
 #include "Python.h"
@@ -1030,8 +1031,7 @@ stack_effect(int opcode, int oparg, int jump)
         case BINARY_ADD:
         case BINARY_SUBTRACT:
         case BINARY_SUBSCR:
-        case BINARY_FLOOR_DIVIDE:
-        case BINARY_TRUE_DIVIDE:
+        case BINARY_OPERATOR:
             return -1;
         case INPLACE_FLOOR_DIVIDE:
         case INPLACE_TRUE_DIVIDE:
@@ -3695,41 +3695,61 @@ unaryop(unaryop_ty op)
     }
 }
 
+#define NB_OPARG(slotname) offsetof(PyNumberMethods, slotname)/sizeof(binaryfunc)
+
 static int
-binop(operator_ty op)
+compiler_binop(struct compiler *c, expr_ty e)
 {
-    switch (op) {
+    VISIT(c, expr, e->v.BinOp.left);
+    VISIT(c, expr, e->v.BinOp.right);
+    int opcode;
+    switch (e->v.BinOp.op) {
     case Add:
-        return BINARY_ADD;
+        opcode = BINARY_ADD;
+        break;
     case Sub:
-        return BINARY_SUBTRACT;
+        opcode = BINARY_SUBTRACT;
+        break;
     case Mult:
-        return BINARY_MULTIPLY;
+        opcode = BINARY_MULTIPLY;
+        break;
     case MatMult:
-        return BINARY_MATRIX_MULTIPLY;
-    case Div:
-        return BINARY_TRUE_DIVIDE;
+        opcode = BINARY_MATRIX_MULTIPLY;
+        break;
     case Mod:
-        return BINARY_MODULO;
+        opcode = BINARY_MODULO;
+        break;
     case Pow:
-        return BINARY_POWER;
+        opcode = BINARY_POWER;
+        break;
     case LShift:
-        return BINARY_LSHIFT;
+        opcode = BINARY_LSHIFT;
+        break;
     case RShift:
-        return BINARY_RSHIFT;
+        opcode = BINARY_RSHIFT;
+        break;
     case BitOr:
-        return BINARY_OR;
+        opcode = BINARY_OR;
+        break;
     case BitXor:
-        return BINARY_XOR;
+        opcode = BINARY_XOR;
+        break;
     case BitAnd:
-        return BINARY_AND;
+        opcode = BINARY_AND;
+        break;
     case FloorDiv:
-        return BINARY_FLOOR_DIVIDE;
+        ADDOP_I(c, BINARY_OPERATOR, NB_OPARG(nb_floor_divide));
+        return 1;
+    case Div:
+        ADDOP_I(c, BINARY_OPERATOR, NB_OPARG(nb_true_divide));
+        return 1;
     default:
         PyErr_Format(PyExc_SystemError,
-            "binary op %d should not be possible", op);
+            "binary op %d should not be possible", e->v.BinOp.op);
         return 0;
     }
+    ADDOP(c, opcode);
+    return 1;
 }
 
 static int
@@ -5355,9 +5375,7 @@ compiler_visit_expr1(struct compiler *c, expr_ty e)
     case BoolOp_kind:
         return compiler_boolop(c, e);
     case BinOp_kind:
-        VISIT(c, expr, e->v.BinOp.left);
-        VISIT(c, expr, e->v.BinOp.right);
-        ADDOP(c, binop(e->v.BinOp.op));
+        return compiler_binop(c, e);
         break;
     case UnaryOp_kind:
         VISIT(c, expr, e->v.UnaryOp.operand);

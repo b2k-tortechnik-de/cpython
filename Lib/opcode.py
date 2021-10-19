@@ -72,13 +72,11 @@ def_op('INPLACE_MATRIX_MULTIPLY', 17)
 
 def_op('BINARY_POWER', 19)
 def_op('BINARY_MULTIPLY', 20)
-
 def_op('BINARY_MODULO', 22)
 def_op('BINARY_ADD', 23)
 def_op('BINARY_SUBTRACT', 24)
 def_op('BINARY_SUBSCR', 25)
-def_op('BINARY_FLOOR_DIVIDE', 26)
-def_op('BINARY_TRUE_DIVIDE', 27)
+
 def_op('INPLACE_FLOOR_DIVIDE', 28)
 def_op('INPLACE_TRUE_DIVIDE', 29)
 def_op('GET_LEN', 30)
@@ -202,6 +200,8 @@ def_op('SET_ADD', 146)
 def_op('MAP_ADD', 147)
 def_op('LOAD_CLASSDEREF', 148)
 hasfree.append(148)
+
+def_op('BINARY_OPERATOR', 150)
 
 def_op('MATCH_CLASS', 152)
 

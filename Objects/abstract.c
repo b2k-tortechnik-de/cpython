@@ -949,6 +949,11 @@ binary_op(PyObject *v, PyObject *w, const int op_slot, const char *op_name)
     return result;
 }
 
+PyObject *
+_Py_BinaryOp(PyObject *v, PyObject *w, const int slotn)
+{
+    return binary_op(v, w, slotn*sizeof(binaryfunc), number_operator_names[slotn]);
+}
 
 /*
   Calling scheme used for ternary operations:
@@ -2977,3 +2982,48 @@ _Py_FreeCharPArray(char *const array[])
     }
     PyMem_Free((void*)array);
 }
+
+#define ENTRY(slot, name) \
+    [offsetof(PyNumberMethods, slot)/sizeof(binaryfunc)] = # name
+
+const char *number_operator_names[sizeof(PyNumberMethods)/sizeof(binaryfunc)] = {
+    ENTRY(nb_add, +),
+    ENTRY(nb_subtract, -),
+    ENTRY(nb_multiply, *),
+    ENTRY(nb_remainder, %),
+    ENTRY(nb_divmod, divmod),
+    ENTRY(nb_power, **),
+    ENTRY(nb_negative, -),
+    ENTRY(nb_positive, +),
+    ENTRY(nb_absolute, abs),
+    ENTRY(nb_bool, __bool__),
+    ENTRY(nb_invert, ~),
+    ENTRY(nb_lshift, <<),
+    ENTRY(nb_rshift, >>),
+    ENTRY(nb_and, &),
+    ENTRY(nb_or, |),
+    ENTRY(nb_xor, ^),
+    ENTRY(nb_int, __int__),
+    ENTRY(nb_reserved, reserved),
+    ENTRY(nb_float,__float__),
+
+    ENTRY(nb_inplace_add, +),
+    ENTRY(nb_inplace_subtract, -),
+    ENTRY(nb_inplace_multiply, *),
+    ENTRY(nb_inplace_remainder, %),
+    ENTRY(nb_inplace_power, **),
+    ENTRY(nb_inplace_lshift, <<),
+    ENTRY(nb_inplace_rshift, >>),
+    ENTRY(nb_inplace_and, &),
+    ENTRY(nb_inplace_or, |),
+    ENTRY(nb_inplace_xor, ^),
+    ENTRY(nb_floor_divide, /" "/),
+    ENTRY(nb_true_divide, /),
+    ENTRY(nb_inplace_floor_divide, /" "/),
+    ENTRY(nb_inplace_true_divide, /),
+    ENTRY(nb_index, __index__),
+    ENTRY(nb_matrix_multiply, @),
+    ENTRY(nb_inplace_matrix_multiply, @),
+};
+
+

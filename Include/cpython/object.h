@@ -148,6 +148,8 @@ typedef struct {
     binaryfunc nb_inplace_matrix_multiply;
 } PyNumberMethods;
 
+extern const char *number_operator_names[sizeof(PyNumberMethods)/sizeof(binaryfunc)];
+
 typedef struct {
     lenfunc sq_length;
     binaryfunc sq_concat;

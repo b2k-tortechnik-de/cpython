@@ -1925,6 +1925,19 @@ check_eval_breaker:
             DISPATCH();
         }
 
+        TARGET(BINARY_OPERATOR) {
+            PyObject *right = POP();
+            PyObject *left = TOP();
+            PyObject *res = _Py_BinaryOp(left, right, oparg);
+            Py_DECREF(left);
+            Py_DECREF(right);
+            SET_TOP(res);
+            if (res == NULL) {
+                goto error;
+            }
+            DISPATCH();
+        }
+
         TARGET(BINARY_POWER) {
             PyObject *exp = POP();
             PyObject *base = TOP();
@@ -2016,30 +2029,6 @@ check_eval_breaker:
             Py_DECREF(right);
             SET_TOP(res);
             if (res == NULL)
-                goto error;
-            DISPATCH();
-        }
-
-        TARGET(BINARY_TRUE_DIVIDE) {
-            PyObject *divisor = POP();
-            PyObject *dividend = TOP();
-            PyObject *quotient = PyNumber_TrueDivide(dividend, divisor);
-            Py_DECREF(dividend);
-            Py_DECREF(divisor);
-            SET_TOP(quotient);
-            if (quotient == NULL)
-                goto error;
-            DISPATCH();
-        }
-
-        TARGET(BINARY_FLOOR_DIVIDE) {
-            PyObject *divisor = POP();
-            PyObject *dividend = TOP();
-            PyObject *quotient = PyNumber_FloorDivide(dividend, divisor);
-            Py_DECREF(dividend);
-            Py_DECREF(divisor);
-            SET_TOP(quotient);
-            if (quotient == NULL)
                 goto error;
             DISPATCH();
         }
