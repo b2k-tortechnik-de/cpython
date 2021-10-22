@@ -1199,28 +1199,23 @@ _Py_Specialize_BinaryAdd(PyObject *left, PyObject *right, _Py_CODEUNIT *instr)
         else {
             *instr = _Py_MAKECODEUNIT(BINARY_ADD_UNICODE, initial_counter_value());
         }
-        goto success;
     }
     else if (left_type == &PyLong_Type) {
         *instr = _Py_MAKECODEUNIT(BINARY_ADD_INT, initial_counter_value());
-        goto success;
     }
     else if (left_type == &PyFloat_Type) {
         *instr = _Py_MAKECODEUNIT(BINARY_ADD_FLOAT, initial_counter_value());
-        goto success;
-
     }
     else {
-        SPECIALIZATION_FAIL(BINARY_ADD, SPEC_FAIL_OTHER);
+        *instr = _Py_MAKECODEUNIT(BINARY_ADD_SAME_TYPES, initial_counter_value());
     }
+    STAT_INC(BINARY_ADD, specialization_success);
+    assert(!PyErr_Occurred());
+    return 0;
 fail:
     STAT_INC(BINARY_ADD, specialization_failure);
     assert(!PyErr_Occurred());
     *instr = _Py_MAKECODEUNIT(_Py_OPCODE(*instr), ADAPTIVE_CACHE_BACKOFF);
-    return 0;
-success:
-    STAT_INC(BINARY_ADD, specialization_success);
-    assert(!PyErr_Occurred());
     return 0;
 }
 

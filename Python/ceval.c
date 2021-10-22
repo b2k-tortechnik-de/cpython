@@ -2170,6 +2170,29 @@ check_eval_breaker:
             DISPATCH();
         }
 
+        TARGET(BINARY_ADD_SAME_TYPES) {
+            PyObject *left = SECOND();
+            PyObject *right = TOP();
+            PyTypeObject *ltype = Py_TYPE(left);
+            DEOPT_IF(ltype != Py_TYPE(right), BINARY_ADD);
+            DEOPT_IF(ltype->tp_as_number == NULL, BINARY_ADD);
+            binaryfunc func = ltype->tp_as_number->nb_add;
+            DEOPT_IF(func == NULL, BINARY_ADD);
+            STAT_INC(BINARY_ADD, hit);
+            PyObject *res = func(left, right);
+            if (res == Py_NotImplemented) {
+                goto unsupported_operand_error;
+            }
+            SET_SECOND(res);
+            Py_DECREF(right);
+            Py_DECREF(left);
+            STACK_SHRINK(1);
+            if (res == NULL) {
+                goto error;
+            }
+            DISPATCH();
+        }
+
         TARGET(BINARY_SUBTRACT) {
             PyObject *right = POP();
             PyObject *left = TOP();
@@ -5155,6 +5178,20 @@ unbound_local_error:
             goto error;
         }
 
+unsupported_operand_error:
+        {
+            const char *op_name = "+";
+            Py_DECREF(Py_NotImplemented);
+            PyObject *left = SECOND();
+            PyObject *right = TOP();
+            PyErr_Format(PyExc_TypeError,
+                "unsupported operand type(s) for %.100s: "
+                "'%.100s' and '%.100s'",
+                op_name,
+                Py_TYPE(left)->tp_name,
+                Py_TYPE(right)->tp_name);
+            goto error;
+        }
 error:
         /* Double-check exception status. */
 #ifdef NDEBUG
