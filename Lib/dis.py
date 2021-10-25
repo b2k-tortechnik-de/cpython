@@ -384,6 +384,11 @@ def parse_exception_table(code):
     except StopIteration:
         return entries
 
+def get_name_from_co_names(names):
+    def get_name(index):
+        return names[index-1]
+    return get_name
+
 def _get_instructions_bytes(code, varname_from_oparg=None,
                             names=None, co_consts=None,
                             linestarts=None, line_offset=0,
@@ -397,7 +402,7 @@ def _get_instructions_bytes(code, varname_from_oparg=None,
 
     """
     co_positions = co_positions or iter(())
-    get_name = None if names is None else names.__getitem__
+    get_name = None if names is None else get_name_from_co_names(names)
     labels = set(findlabels(code))
     for start, end, target, _, _ in exception_entries:
         for i in range(start, end):
@@ -577,7 +582,7 @@ def _find_imports(co):
             if (from_op[0] in hasconst and level_op[0] in hasconst):
                 level = _get_const_value(level_op[0], level_op[1], consts)
                 fromlist = _get_const_value(from_op[0], from_op[1], consts)
-                yield (names[oparg], level, fromlist)
+                yield (names[oparg-1], level, fromlist)
 
 def _find_store_names(co):
     """Find names of variables which are written in the code
@@ -592,7 +597,7 @@ def _find_store_names(co):
     names = co.co_names
     for _, op, arg in _unpack_opargs(co.co_code):
         if op in STORE_OPS:
-            yield names[arg]
+            yield names[arg-1]
 
 
 class Bytecode:

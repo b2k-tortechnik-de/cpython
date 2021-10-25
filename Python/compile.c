@@ -1502,7 +1502,7 @@ compiler_addop_name(struct compiler *c, int opcode, PyObject *dict,
     Py_DECREF(mangled);
     if (arg < 0)
         return 0;
-    return compiler_addop_i(c, opcode, arg);
+    return compiler_addop_i(c, opcode, arg+1);
 }
 
 /* Add an opcode with an integer argument.
@@ -3408,7 +3408,8 @@ compiler_import_as(struct compiler *c, identifier name, identifier asname)
             attr = PyUnicode_Substring(name, pos, (dot != -1) ? dot : len);
             if (!attr)
                 return 0;
-            ADDOP_N(c, IMPORT_FROM, attr, names);
+            ADDOP_NAME(c, IMPORT_FROM, attr, names);
+            Py_DECREF(attr);
             if (dot == -1) {
                 break;
             }
@@ -3860,6 +3861,9 @@ compiler_nameop(struct compiler *c, identifier name, expr_context_ty ctx)
     Py_DECREF(mangled);
     if (arg < 0)
         return 0;
+    if (optype == OP_GLOBAL || optype == OP_NAME) {
+        arg++;
+    }
     return compiler_addop_i(c, op, arg);
 }
 
