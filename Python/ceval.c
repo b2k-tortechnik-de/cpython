@@ -1595,8 +1595,7 @@ start_frame:
 
 resume_frame:
     co = frame->f_code;
-    PyObject *names = co->co_names;
-    PyObject *consts = co->co_consts;
+    PyObject**names_and_consts = &co->names_and_constants[PyTuple_GET_SIZE(co->co_names)];
     _Py_CODEUNIT *first_instr = co->co_firstinstr;
     /*
        frame->f_lasti refers to the index of the last instruction,
@@ -1732,7 +1731,7 @@ check_eval_breaker:
 
         TARGET(LOAD_CONST) {
             PREDICTED(LOAD_CONST);
-            PyObject *value = GETITEM(consts, oparg);
+            PyObject *value = names_and_consts[oparg];
             Py_INCREF(value);
             PUSH(value);
             DISPATCH();
@@ -1772,7 +1771,7 @@ check_eval_breaker:
             next_instr++;
             Py_INCREF(value);
             PUSH(value);
-            value = GETITEM(consts, oparg);
+            value = names_and_consts[oparg];
             Py_INCREF(value);
             PUSH(value);
             NOTRACE_DISPATCH();
@@ -1803,7 +1802,7 @@ check_eval_breaker:
         }
 
         TARGET(LOAD_CONST__LOAD_FAST) {
-            PyObject *value = GETITEM(consts, oparg);
+            PyObject *value = names_and_consts[oparg];
             NEXTOPARG();
             next_instr++;
             Py_INCREF(value);
@@ -2959,7 +2958,7 @@ check_eval_breaker:
         }
 
         TARGET(STORE_NAME) {
-            PyObject *name = GETITEM(names, oparg);
+            PyObject *name = names_and_consts[-oparg-1];
             PyObject *v = POP();
             PyObject *ns = LOCALS();
             int err;
@@ -2980,7 +2979,7 @@ check_eval_breaker:
         }
 
         TARGET(DELETE_NAME) {
-            PyObject *name = GETITEM(names, oparg);
+            PyObject *name = names_and_consts[-oparg-1];
             PyObject *ns = LOCALS();
             int err;
             if (ns == NULL) {
@@ -3047,7 +3046,7 @@ check_eval_breaker:
         TARGET(STORE_ATTR) {
             PREDICTED(STORE_ATTR);
             STAT_INC(STORE_ATTR, unquickened);
-            PyObject *name = GETITEM(names, oparg);
+            PyObject *name = names_and_consts[-oparg-1];
             PyObject *owner = TOP();
             PyObject *v = SECOND();
             int err;
@@ -3061,7 +3060,7 @@ check_eval_breaker:
         }
 
         TARGET(DELETE_ATTR) {
-            PyObject *name = GETITEM(names, oparg);
+            PyObject *name = names_and_consts[-oparg-1];
             PyObject *owner = POP();
             int err;
             err = PyObject_SetAttr(owner, name, (PyObject *)NULL);
@@ -3072,7 +3071,7 @@ check_eval_breaker:
         }
 
         TARGET(STORE_GLOBAL) {
-            PyObject *name = GETITEM(names, oparg);
+            PyObject *name = names_and_consts[-oparg-1];
             PyObject *v = POP();
             int err;
             err = PyDict_SetItem(GLOBALS(), name, v);
@@ -3083,7 +3082,7 @@ check_eval_breaker:
         }
 
         TARGET(DELETE_GLOBAL) {
-            PyObject *name = GETITEM(names, oparg);
+            PyObject *name = names_and_consts[-oparg-1];
             int err;
             err = PyDict_DelItem(GLOBALS(), name);
             if (err != 0) {
@@ -3097,7 +3096,7 @@ check_eval_breaker:
         }
 
         TARGET(LOAD_NAME) {
-            PyObject *name = GETITEM(names, oparg);
+            PyObject *name = names_and_consts[-oparg-1];
             PyObject *locals = LOCALS();
             PyObject *v;
             if (locals == NULL) {
@@ -3163,7 +3162,7 @@ check_eval_breaker:
         TARGET(LOAD_GLOBAL) {
             PREDICTED(LOAD_GLOBAL);
             STAT_INC(LOAD_GLOBAL, unquickened);
-            PyObject *name = GETITEM(names, oparg);
+            PyObject *name = names_and_consts[-oparg-1];
             PyObject *v;
             if (PyDict_CheckExact(GLOBALS())
                 && PyDict_CheckExact(BUILTINS()))
@@ -3186,7 +3185,7 @@ check_eval_breaker:
                 /* Slow-path if globals or builtins is not a dict */
 
                 /* namespace 1: globals */
-                name = GETITEM(names, oparg);
+                name = names_and_consts[-oparg-1];
                 v = PyObject_GetItem(GLOBALS(), name);
                 if (v == NULL) {
                     if (!_PyErr_ExceptionMatches(tstate, PyExc_KeyError)) {
@@ -3214,7 +3213,7 @@ check_eval_breaker:
             assert(cframe.use_tracing == 0);
             SpecializedCacheEntry *cache = GET_CACHE();
             if (cache->adaptive.counter == 0) {
-                PyObject *name = GETITEM(names, cache->adaptive.original_oparg);
+                PyObject *name = names_and_consts[-cache->adaptive.original_oparg-1];
                 next_instr--;
                 if (_Py_Specialize_LoadGlobal(GLOBALS(), BUILTINS(), next_instr, name, cache) < 0) {
                     goto error;
@@ -3634,7 +3633,7 @@ check_eval_breaker:
         TARGET(LOAD_ATTR) {
             PREDICTED(LOAD_ATTR);
             STAT_INC(LOAD_ATTR, unquickened);
-            PyObject *name = GETITEM(names, oparg);
+            PyObject *name = names_and_consts[-oparg-1];
             PyObject *owner = TOP();
             PyObject *res = PyObject_GetAttr(owner, name);
             if (res == NULL) {
@@ -3650,7 +3649,7 @@ check_eval_breaker:
             SpecializedCacheEntry *cache = GET_CACHE();
             if (cache->adaptive.counter == 0) {
                 PyObject *owner = TOP();
-                PyObject *name = GETITEM(names, cache->adaptive.original_oparg);
+                PyObject *name = names_and_consts[-cache->adaptive.original_oparg-1];
                 next_instr--;
                 if (_Py_Specialize_LoadAttr(owner, next_instr, name, cache) < 0) {
                     goto error;
@@ -3714,7 +3713,7 @@ check_eval_breaker:
             PyDictObject *dict = *(PyDictObject **)(((char *)owner) + tp->tp_dictoffset);
             DEOPT_IF(dict == NULL, LOAD_ATTR);
             assert(PyDict_CheckExact((PyObject *)dict));
-            PyObject *name = GETITEM(names, cache0->original_oparg);
+            PyObject *name = names_and_consts[-cache0->original_oparg-1];
             uint32_t hint = cache1->dk_version_or_hint;
             DEOPT_IF(hint >= (size_t)dict->ma_keys->dk_nentries, LOAD_ATTR);
             PyDictKeyEntry *ep = DK_ENTRIES(dict->ma_keys) + hint;
@@ -3753,7 +3752,7 @@ check_eval_breaker:
             SpecializedCacheEntry *cache = GET_CACHE();
             if (cache->adaptive.counter == 0) {
                 PyObject *owner = TOP();
-                PyObject *name = GETITEM(names, cache->adaptive.original_oparg);
+                PyObject *name = names_and_consts[-cache->adaptive.original_oparg-1];
                 next_instr--;
                 if (_Py_Specialize_StoreAttr(owner, next_instr, name, cache) < 0) {
                     goto error;
@@ -3812,7 +3811,7 @@ check_eval_breaker:
             PyDictObject *dict = *(PyDictObject **)(((char *)owner) + tp->tp_dictoffset);
             DEOPT_IF(dict == NULL, STORE_ATTR);
             assert(PyDict_CheckExact((PyObject *)dict));
-            PyObject *name = GETITEM(names, cache0->original_oparg);
+            PyObject *name = names_and_consts[-cache0->original_oparg-1];
             uint32_t hint = cache1->dk_version_or_hint;
             DEOPT_IF(hint >= (size_t)dict->ma_keys->dk_nentries, STORE_ATTR);
             PyDictKeyEntry *ep = DK_ENTRIES(dict->ma_keys) + hint;
@@ -3945,7 +3944,7 @@ check_eval_breaker:
         }
 
         TARGET(IMPORT_NAME) {
-            PyObject *name = GETITEM(names, oparg);
+            PyObject *name = names_and_consts[-oparg-1];
             PyObject *fromlist = POP();
             PyObject *level = TOP();
             PyObject *res;
@@ -3982,7 +3981,7 @@ check_eval_breaker:
         }
 
         TARGET(IMPORT_FROM) {
-            PyObject *name = GETITEM(names, oparg);
+            PyObject *name = names_and_consts[-oparg-1];
             PyObject *from = TOP();
             PyObject *res;
             res = import_from(tstate, from, name);
@@ -4440,7 +4439,7 @@ check_eval_breaker:
             PREDICTED(LOAD_METHOD);
             STAT_INC(LOAD_METHOD, unquickened);
             /* Designed to work in tandem with CALL_METHOD. */
-            PyObject *name = GETITEM(names, oparg);
+            PyObject *name = names_and_consts[-oparg-1];
             PyObject *obj = TOP();
             PyObject *meth = NULL;
 
@@ -4480,7 +4479,7 @@ check_eval_breaker:
             SpecializedCacheEntry *cache = GET_CACHE();
             if (cache->adaptive.counter == 0) {
                 PyObject *owner = TOP();
-                PyObject *name = GETITEM(names, cache->adaptive.original_oparg);
+                PyObject *name = names_and_consts[-cache->adaptive.original_oparg-1];
                 next_instr--;
                 if (_Py_Specialize_LoadMethod(owner, next_instr, name, cache) < 0) {
                     goto error;
