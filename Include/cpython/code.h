@@ -26,7 +26,7 @@ typedef uint16_t _Py_CODEUNIT;
 
 /* Bytecode object */
 struct PyCodeObject {
-    PyObject_HEAD
+    PyObject_VAR_HEAD
 
     /* Note only the following fields are used in hash and/or comparisons
      *
@@ -106,6 +106,7 @@ struct PyCodeObject {
      This should be treated as opaque by all code except the specializer and
      interpreter. */
     union _cache_or_instruction *co_quickened;
+    PyObject *names_and_constants[1];
 
 };
 

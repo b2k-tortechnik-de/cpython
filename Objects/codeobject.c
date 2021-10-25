@@ -351,6 +351,14 @@ init_code(PyCodeObject *co, struct _PyCodeConstructor *con)
 
     co->co_warmup = QUICKENING_INITIAL_WARMUP_VALUE;
     co->co_quickened = NULL;
+    PyObject **ptr = &co->names_and_constants[PyTuple_GET_SIZE(co->co_names)-1];
+    for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(co->co_names); i++) {
+        ptr[-i] = PyTuple_GET_ITEM(co->co_names, i);
+    }
+    ptr = &co->names_and_constants[PyTuple_GET_SIZE(co->co_names)];
+    for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(co->co_consts); i++) {
+        ptr[i] = PyTuple_GET_ITEM(co->co_consts, i);
+    }
 }
 
 /* The caller is responsible for ensuring that the given data is valid. */
@@ -386,7 +394,8 @@ _PyCode_New(struct _PyCodeConstructor *con)
         con->columntable = Py_None;
     }
 
-    PyCodeObject *co = PyObject_New(PyCodeObject, &PyCode_Type);
+    Py_ssize_t names_plus_consts = PyTuple_GET_SIZE(con->names) + PyTuple_GET_SIZE(con->consts);
+    PyCodeObject *co = PyObject_NewVar(PyCodeObject, &PyCode_Type, names_plus_consts);
     if (co == NULL) {
         PyErr_NoMemory();
         return NULL;
@@ -1734,8 +1743,8 @@ static struct PyMethodDef code_methods[] = {
 PyTypeObject PyCode_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "code",
-    sizeof(PyCodeObject),
-    0,
+    sizeof(PyCodeObject) - sizeof(PyObject *),
+    sizeof(PyObject *),
     (destructor)code_dealloc,           /* tp_dealloc */
     0,                                  /* tp_vectorcall_offset */
     0,                                  /* tp_getattr */
