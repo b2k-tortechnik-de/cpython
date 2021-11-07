@@ -366,7 +366,7 @@ _code_type = type(_write_atomic.__code__)
 #     Python 3.11a1 3461 (JUMP_ABSOLUTE must jump backwards)
 #     Python 3.11a2 3462 (bpo-44511: remove COPY_DICT_WITHOUT_KEYS, change
 #                         MATCH_CLASS and MATCH_KEYS, and add COPY)
-
+#     Python 3.11a2 3463 Remove JUMP_IF_FALSE_OR_POP and JUMP_IF_TRUE_OR_POP instructions.
 #
 # MAGIC must change whenever the bytecode emitted by the compiler may no
 # longer be understood by older implementations of the eval loop (usually
@@ -375,7 +375,7 @@ _code_type = type(_write_atomic.__code__)
 # Whenever MAGIC_NUMBER is changed, the ranges in the magic_values array
 # in PC/launcher.c must also be updated.
 
-MAGIC_NUMBER = (3462).to_bytes(2, 'little') + b'\r\n'
+MAGIC_NUMBER = (3463).to_bytes(2, 'little') + b'\r\n'
 _RAW_MAGIC_NUMBER = int.from_bytes(MAGIC_NUMBER, 'little')  # For import.c
 
 _PYCACHE = '__pycache__'

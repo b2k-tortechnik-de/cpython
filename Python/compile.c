@@ -1138,10 +1138,6 @@ stack_effect(int opcode, int oparg, int jump)
         case JUMP_ABSOLUTE:
             return 0;
 
-        case JUMP_IF_TRUE_OR_POP:
-        case JUMP_IF_FALSE_OR_POP:
-            return jump ? 0 : -1;
-
         case POP_JUMP_IF_FALSE:
         case POP_JUMP_IF_TRUE:
             return -1;
@@ -3872,9 +3868,9 @@ compiler_boolop(struct compiler *c, expr_ty e)
 
     assert(e->kind == BoolOp_kind);
     if (e->v.BoolOp.op == And)
-        jumpi = JUMP_IF_FALSE_OR_POP;
+        jumpi = POP_JUMP_IF_FALSE;
     else
-        jumpi = JUMP_IF_TRUE_OR_POP;
+        jumpi = POP_JUMP_IF_TRUE;
     end = compiler_new_block(c);
     if (end == NULL)
         return 0;
@@ -3883,12 +3879,14 @@ compiler_boolop(struct compiler *c, expr_ty e)
     assert(n >= 0);
     for (i = 0; i < n; ++i) {
         VISIT(c, expr, (expr_ty)asdl_seq_GET(s, i));
+        ADDOP(c, DUP_TOP);
         ADDOP_JUMP(c, jumpi, end);
         basicblock *next = compiler_new_block(c);
         if (next == NULL) {
             return 0;
         }
         compiler_use_next_block(c, next);
+        ADDOP(c, POP_TOP);
     }
     VISIT(c, expr, (expr_ty)asdl_seq_GET(s, n));
     compiler_use_next_block(c, end);
@@ -4190,8 +4188,10 @@ compiler_compare(struct compiler *c, expr_ty e)
             ADDOP(c, DUP_TOP);
             ADDOP(c, ROT_THREE);
             ADDOP_COMPARE(c, asdl_seq_GET(e->v.Compare.ops, i));
-            ADDOP_JUMP(c, JUMP_IF_FALSE_OR_POP, cleanup);
+            ADDOP(c, DUP_TOP);
+            ADDOP_JUMP(c, POP_JUMP_IF_FALSE, cleanup);
             NEXT_BLOCK(c);
+            ADDOP(c, POP_TOP);
         }
         VISIT(c, expr, (expr_ty)asdl_seq_GET(e->v.Compare.comparators, n));
         ADDOP_COMPARE(c, asdl_seq_GET(e->v.Compare.ops, n));
@@ -8180,27 +8180,6 @@ optimize_basic_block(struct compiler *c, basicblock *bb, PyObject *consts)
                             bb->b_instr[i+1].i_opcode = NOP;
                         }
                         break;
-                    case JUMP_IF_FALSE_OR_POP:
-                    case JUMP_IF_TRUE_OR_POP:
-                        cnt = get_const_value(inst->i_opcode, oparg, consts);
-                        if (cnt == NULL) {
-                            goto error;
-                        }
-                        is_true = PyObject_IsTrue(cnt);
-                        Py_DECREF(cnt);
-                        if (is_true == -1) {
-                            goto error;
-                        }
-                        jump_if_true = nextop == JUMP_IF_TRUE_OR_POP;
-                        if (is_true == jump_if_true) {
-                            bb->b_instr[i+1].i_opcode = JUMP_ABSOLUTE;
-                            bb->b_nofallthrough = 1;
-                        }
-                        else {
-                            inst->i_opcode = NOP;
-                            bb->b_instr[i+1].i_opcode = NOP;
-                        }
-                        break;
                 }
                 break;
             }
@@ -8247,62 +8226,6 @@ optimize_basic_block(struct compiler *c, basicblock *bb, PyObject *consts)
                       -->  x:POP_JUMP_IF_FALSE y+1
                    where y+1 is the instruction following the second test.
                 */
-            case JUMP_IF_FALSE_OR_POP:
-                switch(target->i_opcode) {
-                    case POP_JUMP_IF_FALSE:
-                        if (inst->i_lineno == target->i_lineno) {
-                            *inst = *target;
-                            i--;
-                        }
-                        break;
-                    case JUMP_ABSOLUTE:
-                    case JUMP_FORWARD:
-                    case JUMP_IF_FALSE_OR_POP:
-                        if (inst->i_lineno == target->i_lineno &&
-                            inst->i_target != target->i_target) {
-                            inst->i_target = target->i_target;
-                            i--;
-                        }
-                        break;
-                    case JUMP_IF_TRUE_OR_POP:
-                        assert (inst->i_target->b_iused == 1);
-                        if (inst->i_lineno == target->i_lineno) {
-                            inst->i_opcode = POP_JUMP_IF_FALSE;
-                            inst->i_target = inst->i_target->b_next;
-                            --i;
-                        }
-                        break;
-                }
-                break;
-
-            case JUMP_IF_TRUE_OR_POP:
-                switch(target->i_opcode) {
-                    case POP_JUMP_IF_TRUE:
-                        if (inst->i_lineno == target->i_lineno) {
-                            *inst = *target;
-                            i--;
-                        }
-                        break;
-                    case JUMP_ABSOLUTE:
-                    case JUMP_FORWARD:
-                    case JUMP_IF_TRUE_OR_POP:
-                        if (inst->i_lineno == target->i_lineno &&
-                            inst->i_target != target->i_target) {
-                            inst->i_target = target->i_target;
-                            i--;
-                        }
-                        break;
-                    case JUMP_IF_FALSE_OR_POP:
-                        assert (inst->i_target->b_iused == 1);
-                        if (inst->i_lineno == target->i_lineno) {
-                            inst->i_opcode = POP_JUMP_IF_TRUE;
-                            inst->i_target = inst->i_target->b_next;
-                            --i;
-                        }
-                        break;
-                }
-                break;
-
             case POP_JUMP_IF_FALSE:
                 switch(target->i_opcode) {
                     case JUMP_ABSOLUTE:
@@ -8481,8 +8404,6 @@ normalize_basic_block(basicblock *bb) {
                 /* fall through */
             case POP_JUMP_IF_FALSE:
             case POP_JUMP_IF_TRUE:
-            case JUMP_IF_FALSE_OR_POP:
-            case JUMP_IF_TRUE_OR_POP:
             case FOR_ITER:
                 if (i != bb->b_iused-1) {
                     PyErr_SetString(PyExc_SystemError, "malformed control flow graph.");

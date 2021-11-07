@@ -4053,55 +4053,6 @@ check_eval_breaker:
             DISPATCH();
         }
 
-        TARGET(JUMP_IF_FALSE_OR_POP) {
-            PyObject *cond = TOP();
-            int err;
-            if (Py_IsTrue(cond)) {
-                STACK_SHRINK(1);
-                Py_DECREF(cond);
-                DISPATCH();
-            }
-            if (Py_IsFalse(cond)) {
-                JUMPTO(oparg);
-                DISPATCH();
-            }
-            err = PyObject_IsTrue(cond);
-            if (err > 0) {
-                STACK_SHRINK(1);
-                Py_DECREF(cond);
-            }
-            else if (err == 0)
-                JUMPTO(oparg);
-            else
-                goto error;
-            DISPATCH();
-        }
-
-        TARGET(JUMP_IF_TRUE_OR_POP) {
-            PyObject *cond = TOP();
-            int err;
-            if (Py_IsFalse(cond)) {
-                STACK_SHRINK(1);
-                Py_DECREF(cond);
-                DISPATCH();
-            }
-            if (Py_IsTrue(cond)) {
-                JUMPTO(oparg);
-                DISPATCH();
-            }
-            err = PyObject_IsTrue(cond);
-            if (err > 0) {
-                JUMPTO(oparg);
-            }
-            else if (err == 0) {
-                STACK_SHRINK(1);
-                Py_DECREF(cond);
-            }
-            else
-                goto error;
-            DISPATCH();
-        }
-
         TARGET(JUMP_ABSOLUTE) {
             PREDICTED(JUMP_ABSOLUTE);
             assert(oparg < INSTR_OFFSET());

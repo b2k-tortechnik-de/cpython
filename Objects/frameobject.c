@@ -201,8 +201,6 @@ mark_stacks(PyCodeObject *code_obj, int len)
             }
             opcode = _Py_OPCODE(code[i]);
             switch (opcode) {
-                case JUMP_IF_FALSE_OR_POP:
-                case JUMP_IF_TRUE_OR_POP:
                 case POP_JUMP_IF_FALSE:
                 case POP_JUMP_IF_TRUE:
                 case JUMP_IF_NOT_EXC_MATCH:
@@ -216,12 +214,6 @@ mark_stacks(PyCodeObject *code_obj, int len)
                     if (opcode == JUMP_IF_NOT_EXC_MATCH) {
                         next_stack = pop_value(pop_value(next_stack));
                         target_stack = next_stack;
-                    }
-                    else if (opcode == JUMP_IF_FALSE_OR_POP ||
-                             opcode == JUMP_IF_TRUE_OR_POP)
-                    {
-                        target_stack = next_stack;
-                        next_stack = pop_value(next_stack);
                     }
                     else {
                         next_stack = pop_value(next_stack);
