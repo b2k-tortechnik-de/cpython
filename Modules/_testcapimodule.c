@@ -3698,6 +3698,7 @@ slot_tp_del(PyObject *self)
      */
     assert(Py_REFCNT(self) > 0);
     Py_SET_REFCNT(self, Py_REFCNT(self) - 1);
+    assert((self->ob_refcnt & REFCOUNT_IMMORTAL) == 0);
     if (Py_REFCNT(self) == 0) {
         /* this is the normal path out */
         return;

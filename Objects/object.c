@@ -221,6 +221,7 @@ PyObject_CallFinalizer(PyObject *self)
 int
 PyObject_CallFinalizerFromDealloc(PyObject *self)
 {
+    assert((self->ob_refcnt & REFCOUNT_IMMORTAL) == 0);
     if (Py_REFCNT(self) != 0) {
         _PyObject_ASSERT_FAILED_MSG(self,
                                     "PyObject_CallFinalizerFromDealloc called "
@@ -1666,7 +1667,7 @@ PyTypeObject _PyNone_Type = {
 
 PyObject _Py_NoneStruct = {
   _PyObject_EXTRA_INIT
-  1, &_PyNone_Type
+  REFCOUNT_QUANTUM | REFCOUNT_IMMORTAL, &_PyNone_Type
 };
 
 /* NotImplemented is an object that can be used to signal that an
@@ -1892,7 +1893,7 @@ _Py_NewReference(PyObject *op)
         _PyTraceMalloc_NewReference(op);
     }
 #ifdef Py_REF_DEBUG
-    _Py_RefTotal++;
+    _Py_RefTotal += ((op->ob_refcnt & REFCOUNT_IMMORTAL) == 0);
 #endif
     Py_SET_REFCNT(op, 1);
 #ifdef Py_TRACE_REFS

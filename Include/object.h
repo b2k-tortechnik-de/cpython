@@ -52,8 +52,9 @@ A standard interface exists for objects that contain an array of items
 whose size is determined when the object is allocated.
 */
 
-#define REFCOUNT_OFFSET 4
+#define REFCOUNT_OFFSET 1
 #define REFCOUNT_QUANTUM (1 << REFCOUNT_OFFSET)
+#define REFCOUNT_IMMORTAL 1
 
 /* Py_DEBUG implies Py_REF_DEBUG. */
 #if defined(Py_DEBUG) && !defined(Py_REF_DEBUG)
@@ -472,7 +473,7 @@ static inline void _Py_INCREF(PyObject *op)
     // Non-limited C API and limited C API for Python 3.9 and older access
     // directly PyObject.ob_refcnt.
 #ifdef Py_REF_DEBUG
-    _Py_RefTotal++;
+    _Py_RefTotal += ((op->ob_refcnt & REFCOUNT_IMMORTAL) == 0);
 #endif
     op->ob_refcnt += REFCOUNT_QUANTUM;
 #endif
@@ -492,17 +493,20 @@ static inline void _Py_DECREF(
     // Non-limited C API and limited C API for Python 3.9 and older access
     // directly PyObject.ob_refcnt.
 #ifdef Py_REF_DEBUG
-    _Py_RefTotal--;
+    _Py_RefTotal -= ((op->ob_refcnt & REFCOUNT_IMMORTAL) == 0);
 #endif
     op->ob_refcnt -= REFCOUNT_QUANTUM;
-    if (op->ob_refcnt < REFCOUNT_QUANTUM) {
+    if (op->ob_refcnt == 0) {
+        _Py_Dealloc(op);
+    }
 #ifdef Py_REF_DEBUG
+    else if (op->ob_refcnt < 0 && (op->ob_refcnt & 1) == 0)
+    {
         if (op->ob_refcnt < 0) {
             _Py_NegativeRefcount(filename, lineno, op);
         }
-#endif
-        _Py_Dealloc(op);
     }
+#endif
 #endif
 }
 #if defined(Py_REF_DEBUG) && !(defined(Py_LIMITED_API) && Py_LIMITED_API+0 >= 0x030A0000)
@@ -614,7 +618,8 @@ PyAPI_FUNC(int) Py_IsNone(PyObject *x);
 #define Py_IsNone(x) Py_Is((x), Py_None)
 
 /* Macro for returning Py_None from a function */
-#define Py_RETURN_NONE return Py_NewRef(Py_None)
+/* None immortal, so we don't need to incref */
+#define Py_RETURN_NONE return Py_None
 
 /*
 Py_NotImplemented is a singleton used to signal that an operation is
