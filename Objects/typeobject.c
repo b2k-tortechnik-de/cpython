@@ -155,7 +155,7 @@ _PyType_CheckConsistency(PyTypeObject *type)
         return 1;
     }
 
-    CHECK(Py_REFCNT(type) >= 1);
+    CHECK(Py_REFCNT(type) >= 1 || (type->ob_base.ob_base.ob_refcnt & REFCOUNT_IMMORTAL));
     CHECK(PyType_Check(type));
 
     CHECK(!(type->tp_flags & Py_TPFLAGS_READYING));
@@ -6399,6 +6399,7 @@ PyType_Ready(PyTypeObject *type)
 
     /* Historically, all static types were immutable. See bpo-43908 */
     if (!(type->tp_flags & Py_TPFLAGS_HEAPTYPE)) {
+        type->ob_base.ob_base.ob_refcnt |= REFCOUNT_IMMORTAL;
         type->tp_flags |= Py_TPFLAGS_IMMUTABLETYPE;
     }
 

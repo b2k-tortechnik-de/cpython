@@ -472,10 +472,12 @@ static inline void _Py_INCREF(PyObject *op)
 #else
     // Non-limited C API and limited C API for Python 3.9 and older access
     // directly PyObject.ob_refcnt.
+    if ((op->ob_refcnt & REFCOUNT_IMMORTAL) == 0) {
 #ifdef Py_REF_DEBUG
-    _Py_RefTotal += ((op->ob_refcnt & REFCOUNT_IMMORTAL) == 0);
+        _Py_RefTotal++;
 #endif
-    op->ob_refcnt += REFCOUNT_QUANTUM;
+        op->ob_refcnt += REFCOUNT_QUANTUM;
+    }
 #endif
 }
 #define Py_INCREF(op) _Py_INCREF(_PyObject_CAST(op))
@@ -492,19 +494,21 @@ static inline void _Py_DECREF(
 #else
     // Non-limited C API and limited C API for Python 3.9 and older access
     // directly PyObject.ob_refcnt.
+    if ((op->ob_refcnt & REFCOUNT_IMMORTAL) == 0) {
 #ifdef Py_REF_DEBUG
-    _Py_RefTotal -= ((op->ob_refcnt & REFCOUNT_IMMORTAL) == 0);
+        _Py_RefTotal--;
 #endif
-    op->ob_refcnt -= REFCOUNT_QUANTUM;
-    if (op->ob_refcnt == 0) {
-        _Py_Dealloc(op);
-    }
-#ifdef Py_REF_DEBUG
-    else if (op->ob_refcnt < 0 && (op->ob_refcnt & 1) == 0)
-    {
-        _Py_NegativeRefcount(filename, lineno, op);
-    }
+        op->ob_refcnt -= REFCOUNT_QUANTUM;
+        if (op->ob_refcnt == 0) {
+            _Py_Dealloc(op);
+        }
+#if defined(Py_REF_DEBUG) && !(defined(Py_LIMITED_API) && Py_LIMITED_API+0 >= 0x030A0000)
+        else if (op->ob_refcnt < 0 && (op->ob_refcnt & 1) == 0)
+        {
+            _Py_NegativeRefcount(filename, lineno, op);
+        }
 #endif
+    }
 #endif
 }
 #if defined(Py_REF_DEBUG) && !(defined(Py_LIMITED_API) && Py_LIMITED_API+0 >= 0x030A0000)
