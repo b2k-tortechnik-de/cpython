@@ -313,17 +313,19 @@ class SysModuleTest(unittest.TestCase):
 
     @test.support.refcount_test
     def test_refcount(self):
-        # n here must be a global in order for this test to pass while
+        # n and m here must be a global in order for this test to pass while
         # tracing with a python function.  Tracing calls PyFrame_FastToLocals
         # which will add a copy of any locals to the frame object, causing
         # the reference count to increase by 2 instead of 1.
-        global n
+        global n, m
         self.assertRaises(TypeError, sys.getrefcount)
-        c = sys.getrefcount(None)
-        n = None
-        self.assertEqual(sys.getrefcount(None), c+1)
+        m = object()
+        c = sys.getrefcount(m)
+        n = m
+        self.assertEqual(sys.getrefcount(m), c+1)
         del n
-        self.assertEqual(sys.getrefcount(None), c)
+        self.assertEqual(sys.getrefcount(m), c)
+        del m
         if hasattr(sys, "gettotalrefcount"):
             self.assertIsInstance(sys.gettotalrefcount(), int)
 

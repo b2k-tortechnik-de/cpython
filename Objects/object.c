@@ -62,12 +62,7 @@ Py_ssize_t _Py_RefTotal;
 Py_ssize_t
 _Py_GetRefTotal(void)
 {
-    PyObject *o;
-    Py_ssize_t total = _Py_RefTotal;
-    o = _PySet_Dummy;
-    if (o != NULL)
-        total -= Py_REFCNT(o);
-    return total;
+    return _Py_RefTotal;
 }
 
 void
@@ -1893,7 +1888,7 @@ _Py_NewReference(PyObject *op)
         _PyTraceMalloc_NewReference(op);
     }
 #ifdef Py_REF_DEBUG
-    _Py_RefTotal += ((op->ob_refcnt & REFCOUNT_IMMORTAL) == 0);
+    _Py_RefTotal++;
 #endif
     Py_SET_REFCNT(op, 1);
 #ifdef Py_TRACE_REFS

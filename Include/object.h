@@ -502,9 +502,7 @@ static inline void _Py_DECREF(
 #ifdef Py_REF_DEBUG
     else if (op->ob_refcnt < 0 && (op->ob_refcnt & 1) == 0)
     {
-        if (op->ob_refcnt < 0) {
-            _Py_NegativeRefcount(filename, lineno, op);
-        }
+        _Py_NegativeRefcount(filename, lineno, op);
     }
 #endif
 #endif
