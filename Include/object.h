@@ -52,9 +52,9 @@ A standard interface exists for objects that contain an array of items
 whose size is determined when the object is allocated.
 */
 
-#define REFCOUNT_OFFSET 1
+#define REFCOUNT_OFFSET 0
 #define REFCOUNT_QUANTUM (1 << REFCOUNT_OFFSET)
-#define REFCOUNT_IMMORTAL 1
+#define REFCOUNT_IMMORTAL (1LL << (8 * sizeof(Py_ssize_t) - 4))
 
 /* Py_DEBUG implies Py_REF_DEBUG. */
 #if defined(Py_DEBUG) && !defined(Py_REF_DEBUG)
