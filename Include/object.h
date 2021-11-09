@@ -52,8 +52,6 @@ A standard interface exists for objects that contain an array of items
 whose size is determined when the object is allocated.
 */
 
-#define REFCOUNT_OFFSET 0
-#define REFCOUNT_QUANTUM (1 << REFCOUNT_OFFSET)
 #define REFCOUNT_IMMORTAL (1LL << (8 * sizeof(Py_ssize_t) - 4))
 
 /* Py_DEBUG implies Py_REF_DEBUG. */
@@ -87,7 +85,7 @@ typedef struct _typeobject PyTypeObject;
 
 #define PyObject_HEAD_INIT(type)        \
     { _PyObject_EXTRA_INIT              \
-    REFCOUNT_QUANTUM, type },
+    1, type },
 
 #define PyVarObject_HEAD_INIT(type, size)       \
     { PyObject_HEAD_INIT(type) size },
@@ -131,10 +129,11 @@ PyAPI_FUNC(int) Py_Is(PyObject *x, PyObject *y);
 #define Py_Is(x, y) ((x) == (y))
 
 static inline Py_ssize_t _Py_REFCNT(const PyObject *ob) {
-    return ob->ob_refcnt >> REFCOUNT_OFFSET;
+    /* Any number > 1 is valid as the refcount of an immortal object */
+    return ob->ob_refcnt & REFCOUNT_IMMORTAL ? 7 : ob->ob_refcnt;
 }
-#define Py_REFCNT(ob) _Py_REFCNT(_PyObject_CAST_CONST(ob))
 
+#define Py_REFCNT(ob) _Py_REFCNT(_PyObject_CAST_CONST(ob))
 
 // bpo-39573: The Py_SET_TYPE() function must be used to set an object type.
 #define Py_TYPE(ob)             (_PyObject_CAST(ob)->ob_type)
@@ -152,7 +151,7 @@ static inline int _Py_IS_TYPE(const PyObject *ob, const PyTypeObject *type) {
 
 
 static inline void _Py_SET_REFCNT(PyObject *ob, Py_ssize_t refcnt) {
-    ob->ob_refcnt = refcnt << REFCOUNT_OFFSET;
+    ob->ob_refcnt = refcnt;
 }
 #define Py_SET_REFCNT(ob, refcnt) _Py_SET_REFCNT(_PyObject_CAST(ob), refcnt)
 
@@ -476,7 +475,7 @@ static inline void _Py_INCREF(PyObject *op)
 #ifdef Py_REF_DEBUG
         _Py_RefTotal++;
 #endif
-        op->ob_refcnt += REFCOUNT_QUANTUM;
+        op->ob_refcnt++;
     }
 #endif
 }
@@ -498,7 +497,7 @@ static inline void _Py_DECREF(
 #ifdef Py_REF_DEBUG
         _Py_RefTotal--;
 #endif
-        op->ob_refcnt -= REFCOUNT_QUANTUM;
+        op->ob_refcnt--;
         if (op->ob_refcnt == 0) {
             _Py_Dealloc(op);
         }

@@ -2533,9 +2533,8 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, InterpreterFrame *frame, int thr
         }
 
         case TARGET(GEN_START): {
-            PyObject *none = POP();
-            Py_DECREF(none);
-            if (!Py_IsNone(none)) {
+            PyObject *obj = TOP();
+            if (!Py_IsNone(obj)) {
                 if (oparg > 2) {
                     _PyErr_SetString(tstate, PyExc_SystemError,
                         "Illegal kind for GEN_START");
@@ -2553,6 +2552,7 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, InterpreterFrame *frame, int thr
                 }
                 goto error;
             }
+            STACK_SHRINK(1);
             DISPATCH();
         }
 

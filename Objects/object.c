@@ -1662,7 +1662,7 @@ PyTypeObject _PyNone_Type = {
 
 PyObject _Py_NoneStruct = {
   _PyObject_EXTRA_INIT
-  REFCOUNT_QUANTUM | REFCOUNT_IMMORTAL, &_PyNone_Type
+  1 | REFCOUNT_IMMORTAL, &_PyNone_Type
 };
 
 /* NotImplemented is an object that can be used to signal that an
@@ -1763,7 +1763,7 @@ PyTypeObject _PyNotImplemented_Type = {
 
 PyObject _Py_NotImplementedStruct = {
     _PyObject_EXTRA_INIT
-    REFCOUNT_QUANTUM, &_PyNotImplemented_Type
+    1, &_PyNotImplemented_Type
 };
 
 PyStatus
