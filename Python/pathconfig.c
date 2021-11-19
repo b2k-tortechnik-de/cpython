@@ -210,7 +210,7 @@ _PyPathConfig_AsDict(void)
         SET_ITEM(#KEY, \
             (_Py_path_config.KEY \
              ? PyUnicode_FromWideChar(_Py_path_config.KEY, -1) \
-             : (Py_INCREF(Py_None), Py_None)))
+             : Py_None))
 #define SET_ITEM_INT(KEY) \
         SET_ITEM(#KEY, PyLong_FromLong(_Py_path_config.KEY))
 

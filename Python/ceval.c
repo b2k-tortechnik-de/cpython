@@ -871,7 +871,6 @@ match_keys(PyThreadState *tstate, PyObject *map, PyObject *keys)
             Py_DECREF(value);
             Py_DECREF(values);
             // Return None:
-            Py_INCREF(Py_None);
             values = Py_None;
             goto done;
         }
@@ -1760,12 +1759,10 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, InterpreterFrame *frame, int thr
             int err = PyObject_IsTrue(value);
             Py_DECREF(value);
             if (err == 0) {
-                Py_INCREF(Py_True);
                 SET_TOP(Py_True);
                 DISPATCH();
             }
             else if (err > 0) {
-                Py_INCREF(Py_False);
                 SET_TOP(Py_False);
                 DISPATCH();
             }
@@ -3633,12 +3630,10 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, InterpreterFrame *frame, int thr
             PREDICTED(POP_JUMP_IF_FALSE);
             PyObject *cond = POP();
             int err;
-            if (Py_IsTrue(cond)) {
-                Py_DECREF(cond);
+            if (cond == Py_True) {
                 DISPATCH();
             }
-            if (Py_IsFalse(cond)) {
-                Py_DECREF(cond);
+            if (cond == Py_False) {
                 JUMPTO(oparg);
                 CHECK_EVAL_BREAKER();
                 DISPATCH();
@@ -3660,12 +3655,10 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, InterpreterFrame *frame, int thr
             PREDICTED(POP_JUMP_IF_TRUE);
             PyObject *cond = POP();
             int err;
-            if (Py_IsFalse(cond)) {
-                Py_DECREF(cond);
+            if (cond == Py_False) {
                 DISPATCH();
             }
-            if (Py_IsTrue(cond)) {
-                Py_DECREF(cond);
+            if (cond == Py_True) {
                 JUMPTO(oparg);
                 CHECK_EVAL_BREAKER();
                 DISPATCH();
@@ -3686,12 +3679,11 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, InterpreterFrame *frame, int thr
         case TARGET(JUMP_IF_FALSE_OR_POP): {
             PyObject *cond = TOP();
             int err;
-            if (Py_IsTrue(cond)) {
+            if (cond == Py_True) {
                 STACK_SHRINK(1);
-                Py_DECREF(cond);
                 DISPATCH();
             }
-            if (Py_IsFalse(cond)) {
+            if (cond == Py_False) {
                 JUMPTO(oparg);
                 DISPATCH();
             }
@@ -3710,12 +3702,11 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, InterpreterFrame *frame, int thr
         case TARGET(JUMP_IF_TRUE_OR_POP): {
             PyObject *cond = TOP();
             int err;
-            if (Py_IsFalse(cond)) {
+            if (cond == Py_False) {
                 STACK_SHRINK(1);
-                Py_DECREF(cond);
                 DISPATCH();
             }
-            if (Py_IsTrue(cond)) {
+            if (cond == Py_True) {
                 JUMPTO(oparg);
                 DISPATCH();
             }
@@ -3826,12 +3817,10 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, InterpreterFrame *frame, int thr
             }
             PUSH(values_or_none);
             if (Py_IsNone(values_or_none)) {
-                Py_INCREF(Py_False);
                 PUSH(Py_False);
                 DISPATCH();
             }
             assert(PyTuple_CheckExact(values_or_none));
-            Py_INCREF(Py_True);
             PUSH(Py_True);
             DISPATCH();
         }
@@ -4048,7 +4037,6 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, InterpreterFrame *frame, int thr
                 SET_TOP(exc_info->exc_type);
             }
             else {
-                Py_INCREF(Py_None);
                 SET_TOP(Py_None);
             }
             Py_INCREF(tb);
@@ -4502,7 +4490,6 @@ exception_unwind:
             PyException_SetTraceback(val, Py_None);
         if (tb == NULL) {
             tb = Py_None;
-            Py_INCREF(Py_None);
         }
         PUSH(tb);
         PUSH(val);

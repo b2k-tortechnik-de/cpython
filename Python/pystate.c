@@ -823,7 +823,6 @@ PyState_RemoveModule(struct PyModuleDef* def)
         Py_FatalError("Module index out of bounds.");
     }
 
-    Py_INCREF(Py_None);
     return PyList_SetItem(interp->modules_by_index, index, Py_None);
 }
 
@@ -1930,8 +1929,6 @@ _long_shared(PyObject *obj, _PyCrossInterpreterData *data)
 static PyObject *
 _new_none_object(_PyCrossInterpreterData *data)
 {
-    // XXX Singleton refcounts are problematic across interpreters...
-    Py_INCREF(Py_None);
     return Py_None;
 }
 

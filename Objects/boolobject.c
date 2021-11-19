@@ -203,7 +203,7 @@ struct _longobject _Py_FalseStruct = {
     {
         {
             _PyObject_EXTRA_INIT
-            REFCOUNT_QUANTUM | REFCOUNT_IMMORTAL,
+            REFCOUNT_IMMORTAL,
             &PyBool_Type
         },
         0
@@ -215,7 +215,7 @@ struct _longobject _Py_TrueStruct = {
     {
         {
             _PyObject_EXTRA_INIT
-            REFCOUNT_QUANTUM | REFCOUNT_IMMORTAL,
+            REFCOUNT_IMMORTAL,
             &PyBool_Type
         },
         1

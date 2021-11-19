@@ -5703,7 +5703,6 @@ compiler_error(struct compiler *c, const char *format, ...)
     }
     PyObject *loc = PyErr_ProgramTextObject(c->c_filename, c->u->u_lineno);
     if (loc == NULL) {
-        Py_INCREF(Py_None);
         loc = Py_None;
     }
     PyObject *args = Py_BuildValue("O(OiiOii)", msg, c->c_filename,
