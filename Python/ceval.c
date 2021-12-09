@@ -4693,6 +4693,58 @@ check_eval_breaker:
             }
         }
 
+        TARGET(CALL_NO_KW_BOUND_METHOD) {
+            assert(extra_args == 0);
+            assert(postcall_shrink == 1);
+            SpecializedCacheEntry *caches = GET_CACHE();
+            _PyAdaptiveEntry *cache0 = &caches[0].adaptive;
+            int argcount = cache0->original_oparg;
+            _PyCallCache *cache1 = &caches[-1].call;
+            PyObject *callable = PEEK(argcount+1);
+            DEOPT_IF(!Py_IS_TYPE(callable, &PyMethod_Type), CALL_NO_KW);
+            PyMethodObject *meth = (PyMethodObject *)callable;
+            PyFunctionObject *func = (PyFunctionObject *)meth->im_func;
+            DEOPT_IF(!PyFunction_Check(func), CALL_NO_KW);
+            DEOPT_IF(func->func_version != cache1->func_version, CALL_NO_KW);
+            /* PEP 523 */
+            DEOPT_IF(tstate->interp->eval_frame != NULL, CALL_NO_KW);
+            STAT_INC(CALL_NO_KW, hit);
+            PyObject *self = meth->im_self;
+            Py_INCREF(self);
+            Py_INCREF(func);
+            Py_DECREF(meth);
+            argcount++;
+            postcall_shrink = 1;
+            PEEK(argcount) = self;
+            PyCodeObject *code = (PyCodeObject *)func->func_code;
+            size_t size = code->co_nlocalsplus + code->co_stacksize + FRAME_SPECIALS_SIZE;
+            InterpreterFrame *new_frame = _PyThreadState_BumpFramePointer(tstate, size);
+            if (new_frame == NULL) {
+                goto error;
+            }
+            _PyFrame_InitializeSpecials(new_frame, func,
+                                        NULL, code->co_nlocalsplus);
+            STACK_SHRINK(argcount);
+            for (int i = 0; i < argcount; i++) {
+                new_frame->localsplus[i] = stack_pointer[i];
+            }
+            int deflen = cache1->defaults_len;
+            for (int i = 0; i < deflen; i++) {
+                PyObject *def = PyTuple_GET_ITEM(func->func_defaults, cache1->defaults_start+i);
+                Py_INCREF(def);
+                new_frame->localsplus[argcount+i] = def;
+            }
+            for (int i = argcount+deflen; i < code->co_nlocalsplus; i++) {
+                new_frame->localsplus[i] = NULL;
+            }
+            Py_DECREF(func);
+            _PyFrame_SetStackPointer(frame, stack_pointer);
+            new_frame->previous = frame;
+            frame = cframe.current_frame = new_frame;
+            new_frame->depth = frame->depth + 1;
+            goto start_frame;
+        }
+
         TARGET(CALL_NO_KW_PY_SIMPLE) {
             SpecializedCacheEntry *caches = GET_CACHE();
             _PyAdaptiveEntry *cache0 = &caches[0].adaptive;

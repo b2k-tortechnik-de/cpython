@@ -493,6 +493,8 @@ initial_counter_value(void) {
 #define SPEC_FAIL_CLASS 18
 #define SPEC_FAIL_C_METHOD_CALL 19
 #define SPEC_FAIL_METHDESCR_NON_METHOD 20
+#define SPEC_FAIL_BOUND_METHOD_NOT_FUNCTION 21
+#define SPEC_FAIL_BOUND_METHOD_METHOD_CALL 22
 
 /* COMPARE_OP */
 #define SPEC_FAIL_STRING_COMPARE 13
@@ -1314,7 +1316,7 @@ specialize_method_descriptor(
 static int
 specialize_py_call(
     PyFunctionObject *func, _Py_CODEUNIT *instr,
-    int nargs, SpecializedCacheEntry *cache)
+    int nargs, SpecializedCacheEntry *cache, int call_op)
 {
     _PyCallCache *cache1 = &cache[-1].call;
     PyCodeObject *code = (PyCodeObject *)func->func_code;
@@ -1353,9 +1355,27 @@ specialize_py_call(
     cache1->func_version = version;
     cache1->defaults_start = defstart;
     cache1->defaults_len = deflen;
-    *instr = _Py_MAKECODEUNIT(CALL_NO_KW_PY_SIMPLE, _Py_OPARG(*instr));
+    *instr = _Py_MAKECODEUNIT(call_op, _Py_OPARG(*instr));
     return 0;
 }
+
+static int
+specialize_bound_method_call(
+    PyMethodObject *meth, _Py_CODEUNIT *instr,
+    int nargs, SpecializedCacheEntry *cache)
+{
+    if (_Py_OPCODE(instr[-1]) == PRECALL_METHOD) {
+        SPECIALIZATION_FAIL(CALL_NO_KW, SPEC_FAIL_BOUND_METHOD_METHOD_CALL);
+        return -1;
+    }
+    if (!PyFunction_Check(meth->im_func)) {
+        SPECIALIZATION_FAIL(CALL_NO_KW, SPEC_FAIL_BOUND_METHOD_NOT_FUNCTION);
+        return -1;
+    }
+    return specialize_py_call((PyFunctionObject *)meth->im_func,
+                              instr, nargs+1, cache, CALL_NO_KW_BOUND_METHOD);
+}
+
 
 #if COLLECT_SPECIALIZATION_STATS_DETAILED
 static int
@@ -1471,7 +1491,8 @@ _Py_Specialize_CallNoKw(
         fail = specialize_c_call(callable, instr, nargs, cache, builtins);
     }
     else if (PyFunction_Check(callable)) {
-        fail = specialize_py_call((PyFunctionObject *)callable, instr, nargs, cache);
+        fail = specialize_py_call((PyFunctionObject *)callable,
+                                  instr, nargs, cache, CALL_NO_KW_PY_SIMPLE);
     }
     else if (PyType_Check(callable)) {
         fail = specialize_class_call(callable, instr, nargs, cache);
@@ -1479,6 +1500,10 @@ _Py_Specialize_CallNoKw(
     else if (Py_IS_TYPE(callable, &PyMethodDescr_Type)) {
         fail = specialize_method_descriptor(
             (PyMethodDescrObject *)callable, instr, nargs, cache);
+    }
+    else if (Py_IS_TYPE(callable, &PyMethod_Type)) {
+        fail = specialize_bound_method_call(
+            (PyMethodObject *)callable, instr, nargs, cache);
     }
     else {
         SPECIALIZATION_FAIL(CALL_NO_KW, call_fail_kind(callable));
