@@ -1,6 +1,7 @@
 
 import opcode
 import timeit
+import types
 
 YIELD_UP = opcode.opmap["YIELD_UP"]
 UNARY_POSITIVE = opcode.opmap["UNARY_POSITIVE"]
@@ -13,10 +14,6 @@ def convert_pos_to_yield_up(func):
             func.__code__ = func.__code__.replace(co_code = new_code)
             break
     return func
-
-@convert_pos_to_yield_up
-def yieldUp(arg):
-    return +arg
 
 class Node:
     __slots__ = "left", "right", "value"
@@ -36,9 +33,28 @@ def create_tree(depth):
     else:
         return Node(None, next_value, None)
 
+COUNT = 20
+
 print("Creating tree")
-TREE = create_tree(20)
-print(f"Created tree of {next_value} nodes")
+TREE = create_tree(COUNT)
+NODES = next_value
+print(f"Created tree of {NODES} nodes")
+
+def count(iterator):
+    t = 0
+    for _ in iterator:
+        t += 1
+    assert(t == NODES)
+
+def walk(tree):
+    if tree is None:
+        return
+    walk(tree.left)
+    walk(tree.right)
+
+baseline = timeit.timeit("walk(TREE); count(range(NODES))", globals=globals(), number=1)
+print(f"Baseline: {baseline:.3f}s")
+
 
 def gen_iter(tree):
     if tree is None:
@@ -47,15 +63,34 @@ def gen_iter(tree):
     yield tree
     yield from gen_iter(tree.right)
 
-def count(iterator):
-    t = 0
-    for _ in iterator:
-        t += 1
-    return t
+gen_time = timeit.timeit("count(gen_iter(TREE))", globals=globals(), number=1)
+print(f"Generator time: {gen_time:.3f}s. Overhead: {gen_time-baseline:.3f}s")
 
-print("Generator:")
-print(timeit.timeit("count(gen_iter(TREE))", globals=globals(), number=1))
+@types.coroutine
+def yieldUp(tree):
+    yield tree
 
+async def async_walk(tree):
+    if tree is None:
+        return
+    await async_walk(tree.left)
+    await yieldUp(tree)
+    await async_walk(tree.right)
+
+def async_iter(tree):
+    tree_walker = async_walk(tree)
+    try:
+        while True:
+            yield tree_walker.send(None)
+    except StopIteration:
+        pass
+
+async_time = timeit.timeit("count(async_iter(TREE))", globals=globals(), number=1)
+print(f"Async time: {async_time:.3f}s. Overhead: {async_time-baseline:.3f}s")
+
+@convert_pos_to_yield_up
+def yieldUp(arg):
+    return +arg
 
 def walk(tree):
     if tree is None:
@@ -66,13 +101,15 @@ def walk(tree):
 
 def fiber_iter(tree):
     tree_walker = Fiber(walk)
-    node = tree_walker.start(tree)
-    while node is not None:
-        yield node
-        node = tree_walker.send(None)
+    try:
+        yield tree_walker.start(tree)
+        while True:
+            yield tree_walker.send(None)
+    except StopIteration:
+        pass
 
-print("Fiber (library only):")
-print(timeit.timeit("count(fiber_iter(TREE))", globals=globals(), number=1))
+fiber_time = timeit.timeit("count(fiber_iter(TREE))", globals=globals(), number=1)
+print(f"Fiber time (library only): {fiber_time:.3f}s. Overhead: {fiber_time-baseline:.3f}s")
 
 @convert_pos_to_yield_up
 def walk(tree):
@@ -82,8 +119,11 @@ def walk(tree):
     +tree
     walk(tree.right)
 
-print("Fiber (with custom syntax):")
-print(timeit.timeit("count(fiber_iter(TREE))", globals=globals(), number=1))
+fiber_time = timeit.timeit("count(fiber_iter(TREE))", globals=globals(), number=1)
+print(f"Fiber time (with custom syntax): {fiber_time:.3f}s. Overhead: {fiber_time-baseline:.3f}s")
+
+#Time to create a Fiber. Create in batches of 100_000 to force realistic memory allocation.
+print(f"Fiber creation: {timeit.timeit('[Fiber(walk) for _ in range(100_0000)]', globals=globals(), number=1):.1f}μs")
 
 def test_throw(tree):
     tree_walker = Fiber(walk)

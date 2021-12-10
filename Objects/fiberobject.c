@@ -101,6 +101,13 @@ fiber_send(PyFiberObject *self, PyObject *obj)
         /* Completed */
         _PyEvalFrameClearAndPop(tstate, self->entry_frame);
         self->entry_frame = NULL;
+        if (result == Py_None) {
+            PyErr_SetNone(PyExc_StopIteration);
+        }
+        else {
+            _PyGen_SetStopIterationValue(result);
+        }
+        Py_CLEAR(result);
     }
     tstate->current_fiber = NULL;
     swap_stacks(self, tstate);
