@@ -25,8 +25,8 @@ create_frame_stack(PyFiberObject *fiber)
     return 0;
 }
 
-static void
-swap_stacks(PyFiberObject *fiber, PyThreadState *tstate)
+void
+_PyFiberSwapStacks(PyFiberObject *fiber, PyThreadState *tstate)
 {
     _PyStackChunk *datastack_chunk = tstate->datastack_chunk;
     PyObject **datastack_top = tstate->datastack_top;
@@ -43,7 +43,7 @@ PyObject *
 fiber_start(PyFiberObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     PyThreadState *tstate = _PyThreadState_GET();
-    swap_stacks(self, tstate);
+    _PyFiberSwapStacks(self, tstate);
     for(Py_ssize_t i = 0; i < nargs; i++) {
         Py_INCREF(args[i]);
     }
@@ -63,7 +63,7 @@ fiber_start(PyFiberObject *self, PyObject *const *args, Py_ssize_t nargs, PyObje
         self->entry_frame = NULL;
     }
     tstate->current_fiber = NULL;
-    swap_stacks(self, tstate);
+    _PyFiberSwapStacks(self, tstate);
     tstate->current_fiber = previous;
     return result;
 }
@@ -92,7 +92,7 @@ fiber_send(PyFiberObject *self, PyObject *obj)
     _PyFrame_StackPush(frame, obj);
     self->entry_frame->previous = tstate->cframe->current_frame;
     /* TO DO -- Handle exc_info */
-    swap_stacks(self, tstate);
+    _PyFiberSwapStacks(self, tstate);
     PyFiberObject *previous = tstate->current_fiber;
     tstate->current_fiber = self;
     PyObject *result = _PyEval_EvalFrame(tstate, frame, 0);
@@ -110,7 +110,7 @@ fiber_send(PyFiberObject *self, PyObject *obj)
         Py_CLEAR(result);
     }
     tstate->current_fiber = NULL;
-    swap_stacks(self, tstate);
+    _PyFiberSwapStacks(self, tstate);
     tstate->current_fiber = previous;
     return result;
 }
@@ -169,7 +169,7 @@ fiber_throw(PyFiberObject *self, PyObject *exc)
     self->suspended_frame = NULL;
     self->entry_frame->previous = tstate->cframe->current_frame;
     /* TO DO -- Handle exc_info */
-    swap_stacks(self, tstate);
+    _PyFiberSwapStacks(self, tstate);
     PyFiberObject *previous = tstate->current_fiber;
     tstate->current_fiber = self;
     PyObject *result = _PyEval_EvalFrame(tstate, frame, 1);
@@ -180,7 +180,7 @@ fiber_throw(PyFiberObject *self, PyObject *exc)
         self->entry_frame = NULL;
     }
     tstate->current_fiber = NULL;
-    swap_stacks(self, tstate);
+    _PyFiberSwapStacks(self, tstate);
     tstate->current_fiber = previous;
     return result;
 }
@@ -207,6 +207,7 @@ fiber_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     }
     Py_INCREF(callable);
     fiber->callable = callable;
+    fiber->suspended_frame = NULL;
     if (create_frame_stack(fiber)) {
         Py_DECREF(fiber);
         return NULL;

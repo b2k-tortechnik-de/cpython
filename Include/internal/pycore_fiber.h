@@ -18,6 +18,8 @@ typedef struct _fiberobject {
 
 extern PyTypeObject PyFiber_Type;
 
+void _PyFiberSwapStacks(PyFiberObject *fiber, PyThreadState *tstate);
+
 
 #ifdef __cplusplus
 }

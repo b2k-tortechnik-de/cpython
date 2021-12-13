@@ -103,6 +103,7 @@ def_op('IMPORT_STAR', 84)
 def_op('SETUP_ANNOTATIONS', 85)
 def_op('YIELD_VALUE', 86)
 def_op('YIELD_UP', 87)
+def_op('EXCHANGE', 88)
 
 def_op('POP_EXCEPT', 89)
 

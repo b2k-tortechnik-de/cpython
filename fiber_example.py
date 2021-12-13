@@ -5,15 +5,19 @@ import types
 
 YIELD_UP = opcode.opmap["YIELD_UP"]
 UNARY_POSITIVE = opcode.opmap["UNARY_POSITIVE"]
+BINARY_SUBSCR = opcode.opmap["BINARY_SUBSCR"]
+EXCHANGE = opcode.opmap["EXCHANGE"]
 
-def convert_pos_to_yield_up(func):
-    code = func.__code__.co_code
-    for index, op in enumerate(code[::2]):
-        if op == UNARY_POSITIVE:
-            new_code = code[:index*2] + bytes([YIELD_UP]) + code[index*2+1:]
-            func.__code__ = func.__code__.replace(co_code = new_code)
-            break
-    return func
+def change_op(from_op, to_op):
+    def convert(func):
+        code = func.__code__.co_code
+        for index, op in enumerate(code[::2]):
+            if op == from_op:
+                new_code = code[:index*2] + bytes([to_op]) + code[index*2+1:]
+                func.__code__ = func.__code__.replace(co_code = new_code)
+                break
+        return func
+    return convert
 
 class Node:
     __slots__ = "left", "right", "value"
@@ -52,7 +56,12 @@ def walk(tree):
     walk(tree.left)
     walk(tree.right)
 
-baseline = timeit.timeit("walk(TREE); count(range(NODES))", globals=globals(), number=1)
+def baseline(tree):
+    walk(tree)
+    for _ in range(NODES):
+        yield tree
+
+baseline = timeit.timeit("count(baseline(TREE))", globals=globals(), number=1)
 print(f"Baseline: {baseline:.3f}s")
 
 
@@ -88,9 +97,13 @@ def async_iter(tree):
 async_time = timeit.timeit("count(async_iter(TREE))", globals=globals(), number=1)
 print(f"Async time: {async_time:.3f}s. Overhead: {async_time-baseline:.3f}s")
 
-@convert_pos_to_yield_up
+@change_op(UNARY_POSITIVE, YIELD_UP)
 def yieldUp(arg):
     return +arg
+
+@change_op(BINARY_SUBSCR, EXCHANGE)
+def exchange(fiber, arg):
+    return fiber[arg]
 
 def walk(tree):
     if tree is None:
@@ -111,7 +124,7 @@ def fiber_iter(tree):
 fiber_time = timeit.timeit("count(fiber_iter(TREE))", globals=globals(), number=1)
 print(f"Fiber time (library only): {fiber_time:.3f}s. Overhead: {fiber_time-baseline:.3f}s")
 
-@convert_pos_to_yield_up
+@change_op(UNARY_POSITIVE, YIELD_UP)
 def walk(tree):
     if tree is None:
         return

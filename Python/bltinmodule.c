@@ -3037,7 +3037,7 @@ _PyBuiltin_Init(PyInterpreterState *interp)
     SETBUILTIN("complex",               &PyComplex_Type);
     SETBUILTIN("dict",                  &PyDict_Type);
     SETBUILTIN("enumerate",             &PyEnum_Type);
-    SETBUILTIN("Fiber",                 &PyFiber_Type);
+    SETBUILTIN("_Fiber",                &PyFiber_Type);
     SETBUILTIN("filter",                &PyFilter_Type);
     SETBUILTIN("float",                 &PyFloat_Type);
     SETBUILTIN("frozenset",             &PyFrozenSet_Type);

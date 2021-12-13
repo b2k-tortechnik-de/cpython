@@ -2648,6 +2648,44 @@ check_eval_breaker:
             return retval;
         }
 
+        TARGET(EXCHANGE) {
+            assert(STACK_LEVEL() > 1);
+            PyObject *val = POP();
+            PyObject *f = POP();
+            if (Py_TYPE(f) != &PyFiber_Type) {
+                _PyErr_SetString(tstate, PyExc_TypeError,
+                                 "Not a Fiber");
+                goto error;
+            }
+            PyFiberObject* fiber = (PyFiberObject*)f;
+            if (fiber->suspended_frame == NULL) {
+                if (fiber->entry_frame == NULL) {
+                    PyErr_SetString(
+                        PyExc_RuntimeError,
+                        "cannot exchange with a fiber that has not been started");
+                }
+                else {
+                    PyErr_SetString(
+                        PyExc_RuntimeError,
+                        "cannot exchange with a running fiber.");
+                }
+                goto error;
+            }
+            _PyFrame_SetStackPointer(frame, stack_pointer);
+            frame->f_state = FRAME_SUSPENDED;
+            tstate->current_fiber->suspended_frame = frame;
+            assert(fiber->entry_frame->previous == NULL);
+            fiber->entry_frame->previous = tstate->current_fiber->entry_frame->previous;
+            tstate->current_fiber->entry_frame->previous = NULL;
+            _PyFiberSwapStacks(fiber, tstate);
+            tstate->current_fiber = fiber;
+            frame = fiber->suspended_frame;
+            fiber->suspended_frame = NULL;
+            frame->f_state = FRAME_EXECUTING;
+            _PyFrame_StackPush(frame, val);
+            goto resume_frame;
+        }
+
         TARGET(GEN_START) {
             PyObject *none = POP();
             Py_DECREF(none);
