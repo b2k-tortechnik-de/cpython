@@ -135,7 +135,7 @@ gen_dealloc(PyGenObject *gen)
     if (gen->gi_frame_valid) {
         InterpreterFrame *frame = (InterpreterFrame *)gen->gi_iframe;
         gen->gi_frame_valid = 0;
-        frame->generator = NULL;
+        frame->in_gen = 0;
         frame->previous = NULL;
         _PyFrame_Clear(frame);
     }
@@ -267,7 +267,7 @@ gen_send_ex2(PyGenObject *gen, PyObject *arg, PyObject **presult,
     /* first clean reference cycle through stored exception traceback */
     _PyErr_ClearExcState(&gen->gi_exc_state);
 
-    frame->generator = NULL;
+    frame->in_gen = 0;
     gen->gi_frame_valid = 0;
     _PyFrame_Clear(frame);
     *presult = result;
@@ -965,7 +965,7 @@ gen_new_with_qualname(PyTypeObject *type, PyFrameObject *f,
     assert(frame->frame_obj == f);
     f->f_owns_frame = 0;
     f->f_frame = frame;
-    frame->generator = (PyObject *) gen;
+    frame->in_gen = 1;
     assert(PyObject_GC_IsTracked((PyObject *)f));
     gen->gi_code = PyFrame_GetCode(f);
     Py_INCREF(gen->gi_code);

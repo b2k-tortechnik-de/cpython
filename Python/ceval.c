@@ -5937,7 +5937,7 @@ make_coro(PyThreadState *tstate, PyFunctionObject *func,
         Py_DECREF(gen);
         return NULL;
     }
-    frame->generator = gen;
+    frame->in_gen = 1;
     return gen;
 }
 

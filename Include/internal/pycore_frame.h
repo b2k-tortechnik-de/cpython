@@ -4,6 +4,7 @@
 extern "C" {
 #endif
 
+#include <stddef.h>
 
 /* runtime lifecycle */
 
@@ -39,12 +40,12 @@ typedef struct _interpreter_frame {
     PyCodeObject *f_code; /* Strong reference */
     PyObject *f_locals; /* Strong reference, may be NULL */
     PyFrameObject *frame_obj; /* Strong reference, may be NULL */
-    PyObject *generator; /* Borrowed reference, may be NULL */
     struct _interpreter_frame *previous;
     int f_lasti;       /* Last instruction if called */
     int stacktop;     /* Offset of TOS from localsplus  */
     PyFrameState f_state;  /* What state the frame is in */
     char entry;      /* Entry frame of a ceval loop */
+    char in_gen;     /* Is this frame embedded in a generator */
     PyObject *localsplus[1];
 } InterpreterFrame;
 
@@ -102,6 +103,15 @@ _PyFrame_Initialize(
     frame->stacktop = nlocalsplus;
     frame->f_lasti = -1;
     frame->f_state = FRAME_CREATED;
+}
+
+/* Gets the pointer to the generator enclosing
+ * this frame */
+static inline PyObject *
+_PyFrame_GetGen(InterpreterFrame *frame)
+{
+    assert(frame->in_gen);
+    return (PyObject *)(((char *)frame) - offsetof(PyGenObject, gi_iframe));
 }
 
 /* Gets the pointer to the locals array
