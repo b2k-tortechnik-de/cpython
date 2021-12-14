@@ -44,7 +44,7 @@ typedef struct _interpreter_frame {
     int f_lasti;       /* Last instruction if called */
     int stacktop;     /* Offset of TOS from localsplus  */
     PyFrameState f_state;  /* What state the frame is in */
-    int depth; /* Depth of the frame in a ceval loop */
+    char entry;      /* Entry frame of a ceval loop */
     PyObject *localsplus[1];
 } InterpreterFrame;
 
