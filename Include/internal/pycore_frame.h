@@ -36,8 +36,8 @@ typedef struct _interpreter_frame {
     PyFunctionObject *f_func; /* Strong reference */
     PyObject *f_globals; /* Borrowed reference */
     PyObject *f_builtins; /* Borrowed reference */
-    PyObject *f_locals; /* Strong reference, may be NULL */
     PyCodeObject *f_code; /* Strong reference */
+    PyObject *f_locals; /* Strong reference, may be NULL */
     PyFrameObject *frame_obj; /* Strong reference, may be NULL */
     PyObject *generator; /* Borrowed reference, may be NULL */
     struct _interpreter_frame *previous;
@@ -85,22 +85,23 @@ static inline void _PyFrame_StackPush(InterpreterFrame *f, PyObject *value) {
 void _PyFrame_Copy(InterpreterFrame *src, InterpreterFrame *dest);
 
 static inline void
-_PyFrame_InitializeSpecials(
-    InterpreterFrame *frame, PyFunctionObject *func,
-    PyObject *locals, int nlocalsplus)
+_PyFrame_Initialize(
+    InterpreterFrame *frame, PyFunctionObject *func)
 {
     Py_INCREF(func);
     frame->f_func = func;
-    frame->f_code = (PyCodeObject *)Py_NewRef(func->func_code);
-    frame->f_builtins = func->func_builtins;
     frame->f_globals = func->func_globals;
-    frame->f_locals = Py_XNewRef(locals);
+    frame->f_builtins = func->func_builtins;
+    PyCodeObject *code = (PyCodeObject *)func->func_code;
+    Py_INCREF(code);
+    frame->f_code = code;
+    int nlocalsplus = code->co_nlocalsplus;
+    char *ptr = (char *)&frame->f_locals;
+    int n = ((char *)&frame->localsplus[nlocalsplus]) - ptr;
+    memset(ptr, 0, n);
     frame->stacktop = nlocalsplus;
-    frame->frame_obj = NULL;
-    frame->generator = NULL;
     frame->f_lasti = -1;
     frame->f_state = FRAME_CREATED;
-    frame->depth = 0;
 }
 
 /* Gets the pointer to the locals array
@@ -163,8 +164,8 @@ _PyFrame_FastToLocalsWithError(InterpreterFrame *frame);
 void
 _PyFrame_LocalsToFast(InterpreterFrame *frame, int clear);
 
-InterpreterFrame *_PyThreadState_PushFrame(
-    PyThreadState *tstate, PyFunctionObject *func, PyObject *locals);
+InterpreterFrame *
+_PyThreadState_PushFrame(PyThreadState *tstate, PyFunctionObject *func);
 
 extern InterpreterFrame *
 _PyThreadState_BumpFramePointerSlow(PyThreadState *tstate, size_t size);

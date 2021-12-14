@@ -2226,7 +2226,7 @@ _PyThreadState_BumpFramePointerSlow(PyThreadState *tstate, size_t size)
 
 
 InterpreterFrame *
-_PyThreadState_PushFrame(PyThreadState *tstate, PyFunctionObject *func, PyObject *locals)
+_PyThreadState_PushFrame(PyThreadState *tstate, PyFunctionObject *func)
 {
     PyCodeObject *code = (PyCodeObject *)func->func_code;
     int nlocalsplus = code->co_nlocalsplus;
@@ -2236,10 +2236,7 @@ _PyThreadState_PushFrame(PyThreadState *tstate, PyFunctionObject *func, PyObject
     if (frame == NULL) {
         return NULL;
     }
-    _PyFrame_InitializeSpecials(frame, func, locals, nlocalsplus);
-    for (int i=0; i < nlocalsplus; i++) {
-        frame->localsplus[i] = NULL;
-    }
+    _PyFrame_Initialize(frame, func);
     return frame;
 }
 

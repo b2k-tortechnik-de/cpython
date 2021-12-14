@@ -767,15 +767,6 @@ PyTypeObject PyFrame_Type = {
 
 _Py_IDENTIFIER(__builtins__);
 
-static void
-init_frame(InterpreterFrame *frame, PyFunctionObject *func, PyObject *locals)
-{
-    PyCodeObject *code = (PyCodeObject *)func->func_code;
-    _PyFrame_InitializeSpecials(frame, func, locals, code->co_nlocalsplus);
-    for (Py_ssize_t i = 0; i < code->co_nlocalsplus; i++) {
-        frame->localsplus[i] = NULL;
-    }
-}
 
 PyFrameObject*
 _PyFrame_New_NoTrack(PyCodeObject *code)
@@ -821,7 +812,12 @@ PyFrame_New(PyThreadState *tstate, PyCodeObject *code,
         Py_DECREF(func);
         return NULL;
     }
-    init_frame((InterpreterFrame *)f->_f_frame_data, func, locals);
+    InterpreterFrame *frame = (InterpreterFrame *)f->_f_frame_data;
+    _PyFrame_Initialize(frame, func);
+    if (locals) {
+        frame->f_locals = locals;
+        Py_INCREF(locals);
+    }
     f->f_frame = (InterpreterFrame *)f->_f_frame_data;
     f->f_owns_frame = 1;
     Py_DECREF(func);

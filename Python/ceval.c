@@ -2301,21 +2301,14 @@ check_eval_breaker:
             PyFunctionObject *getitem = (PyFunctionObject *)cache1->obj;
             DEOPT_IF(Py_TYPE(container)->tp_version_tag != cache0->version, BINARY_SUBSCR);
             DEOPT_IF(getitem->func_version != cache0->index, BINARY_SUBSCR);
-            PyCodeObject *code = (PyCodeObject *)getitem->func_code;
-            size_t size = code->co_nlocalsplus + code->co_stacksize + FRAME_SPECIALS_SIZE;
-            assert(code->co_argcount == 2);
-            InterpreterFrame *new_frame = _PyThreadState_BumpFramePointer(tstate, size);
+            assert(((PyCodeObject *)getitem->func_code)->co_argcount == 2);
+            InterpreterFrame *new_frame = _PyThreadState_PushFrame(tstate, getitem);
             if (new_frame == NULL) {
                 goto error;
             }
-            _PyFrame_InitializeSpecials(new_frame, getitem,
-                                        NULL, code->co_nlocalsplus);
             STACK_SHRINK(2);
             new_frame->localsplus[0] = container;
             new_frame->localsplus[1] = sub;
-            for (int i = 2; i < code->co_nlocalsplus; i++) {
-                new_frame->localsplus[i] = NULL;
-            }
             _PyFrame_SetStackPointer(frame, stack_pointer);
             new_frame->previous = frame;
             frame = cframe.current_frame = new_frame;
@@ -4714,15 +4707,11 @@ check_eval_breaker:
             /* PEP 523 */
             DEOPT_IF(tstate->interp->eval_frame != NULL, CALL_NO_KW);
             STAT_INC(CALL_NO_KW, hit);
-            PyCodeObject *code = (PyCodeObject *)func->func_code;
-            size_t size = code->co_nlocalsplus + code->co_stacksize + FRAME_SPECIALS_SIZE;
-            InterpreterFrame *new_frame = _PyThreadState_BumpFramePointer(tstate, size);
+            InterpreterFrame *new_frame = _PyThreadState_PushFrame(tstate, func);
             if (new_frame == NULL) {
                 RESET_STACK_ADJUST_FOR_CALLS;
                 goto error;
             }
-            _PyFrame_InitializeSpecials(new_frame, func,
-                                        NULL, code->co_nlocalsplus);
             STACK_SHRINK(argcount);
             for (int i = 0; i < argcount; i++) {
                 new_frame->localsplus[i] = stack_pointer[i];
@@ -4732,9 +4721,6 @@ check_eval_breaker:
                 PyObject *def = PyTuple_GET_ITEM(func->func_defaults, cache1->defaults_start+i);
                 Py_INCREF(def);
                 new_frame->localsplus[argcount+i] = def;
-            }
-            for (int i = argcount+deflen; i < code->co_nlocalsplus; i++) {
-                new_frame->localsplus[i] = NULL;
             }
             STACK_SHRINK(postcall_shrink);
             RESET_STACK_ADJUST_FOR_CALLS;
@@ -5944,10 +5930,10 @@ make_coro(PyThreadState *tstate, PyFunctionObject *func,
         return NULL;
     }
     InterpreterFrame *frame = (InterpreterFrame *)((PyGenObject *)gen)->gi_iframe;
-    PyCodeObject *code = (PyCodeObject *)func->func_code;
-    _PyFrame_InitializeSpecials(frame, func, locals, code->co_nlocalsplus);
-    for (int i = 0; i < code->co_nlocalsplus; i++) {
-        frame->localsplus[i] = NULL;
+    _PyFrame_Initialize(frame, func);
+    if (locals != NULL) {
+        Py_INCREF(locals);
+        frame->f_locals = locals;
     }
     ((PyGenObject *)gen)->gi_frame_valid = 1;
     if (initialize_locals(tstate, func, frame->localsplus, args, argcount, kwnames)) {
@@ -5964,18 +5950,15 @@ _PyEvalFramePushAndInit(PyThreadState *tstate, PyFunctionObject *func,
                         PyObject *locals, PyObject* const* args,
                         size_t argcount, PyObject *kwnames)
 {
-    PyCodeObject * code = (PyCodeObject *)func->func_code;
-    size_t size = code->co_nlocalsplus + code->co_stacksize + FRAME_SPECIALS_SIZE;
-    InterpreterFrame *frame = _PyThreadState_BumpFramePointer(tstate, size);
+    InterpreterFrame *frame = _PyThreadState_PushFrame(tstate, func);
     if (frame == NULL) {
         goto fail;
     }
-    _PyFrame_InitializeSpecials(frame, func, locals, code->co_nlocalsplus);
-    PyObject **localsarray = &frame->localsplus[0];
-    for (int i = 0; i < code->co_nlocalsplus; i++) {
-        localsarray[i] = NULL;
+    if (locals != NULL) {
+        Py_INCREF(locals);
+        frame->f_locals = locals;
     }
-    if (initialize_locals(tstate, func, localsarray, args, argcount, kwnames)) {
+    if (initialize_locals(tstate, func, &frame->localsplus[0], args, argcount, kwnames)) {
         _PyFrame_Clear(frame);
         return NULL;
     }
