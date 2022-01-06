@@ -1344,8 +1344,6 @@ eval_frame_handle_pending(PyThreadState *tstate)
     { \
         NEXTOPARG(); \
         PRE_DISPATCH_GOTO(); \
-        assert(cframe.use_tracing == 0 || cframe.use_tracing == 255); \
-        opcode |= cframe.use_tracing OR_DTRACE_LINE; \
         DISPATCH_GOTO(); \
     }
 
@@ -3077,7 +3075,6 @@ check_eval_breaker:
         }
 
         TARGET(LOAD_GLOBAL_ADAPTIVE) {
-            assert(cframe.use_tracing == 0);
             SpecializedCacheEntry *cache = GET_CACHE();
             if (cache->adaptive.counter == 0) {
                 PyObject *name = GETITEM(names, cache->adaptive.original_oparg);
@@ -3096,7 +3093,6 @@ check_eval_breaker:
         }
 
         TARGET(LOAD_GLOBAL_MODULE) {
-            assert(cframe.use_tracing == 0);
             DEOPT_IF(!PyDict_CheckExact(GLOBALS()), LOAD_GLOBAL);
             PyDictObject *dict = (PyDictObject *)GLOBALS();
             SpecializedCacheEntry *caches = GET_CACHE();
@@ -3113,7 +3109,6 @@ check_eval_breaker:
         }
 
         TARGET(LOAD_GLOBAL_BUILTIN) {
-            assert(cframe.use_tracing == 0);
             DEOPT_IF(!PyDict_CheckExact(GLOBALS()), LOAD_GLOBAL);
             DEOPT_IF(!PyDict_CheckExact(BUILTINS()), LOAD_GLOBAL);
             PyDictObject *mdict = (PyDictObject *)GLOBALS();
@@ -3522,7 +3517,6 @@ check_eval_breaker:
         }
 
         TARGET(LOAD_ATTR_ADAPTIVE) {
-            assert(cframe.use_tracing == 0);
             SpecializedCacheEntry *cache = GET_CACHE();
             if (cache->adaptive.counter == 0) {
                 PyObject *owner = TOP();
@@ -3542,7 +3536,6 @@ check_eval_breaker:
         }
 
         TARGET(LOAD_ATTR_INSTANCE_VALUE) {
-            assert(cframe.use_tracing == 0);
             PyObject *owner = TOP();
             PyObject *res;
             PyTypeObject *tp = Py_TYPE(owner);
@@ -3565,7 +3558,6 @@ check_eval_breaker:
         }
 
         TARGET(LOAD_ATTR_MODULE) {
-            assert(cframe.use_tracing == 0);
             // shared with LOAD_METHOD_MODULE
             PyObject *owner = TOP();
             PyObject *res;
@@ -3576,7 +3568,6 @@ check_eval_breaker:
         }
 
         TARGET(LOAD_ATTR_WITH_HINT) {
-            assert(cframe.use_tracing == 0);
             PyObject *owner = TOP();
             PyObject *res;
             PyTypeObject *tp = Py_TYPE(owner);
@@ -3604,7 +3595,6 @@ check_eval_breaker:
         }
 
         TARGET(LOAD_ATTR_SLOT) {
-            assert(cframe.use_tracing == 0);
             PyObject *owner = TOP();
             PyObject *res;
             PyTypeObject *tp = Py_TYPE(owner);
@@ -3624,7 +3614,6 @@ check_eval_breaker:
         }
 
         TARGET(STORE_ATTR_ADAPTIVE) {
-            assert(cframe.use_tracing == 0);
             SpecializedCacheEntry *cache = GET_CACHE();
             if (cache->adaptive.counter == 0) {
                 PyObject *owner = TOP();
@@ -3644,7 +3633,6 @@ check_eval_breaker:
         }
 
         TARGET(STORE_ATTR_INSTANCE_VALUE) {
-            assert(cframe.use_tracing == 0);
             PyObject *owner = TOP();
             PyTypeObject *tp = Py_TYPE(owner);
             SpecializedCacheEntry *caches = GET_CACHE();
@@ -3673,7 +3661,6 @@ check_eval_breaker:
         }
 
         TARGET(STORE_ATTR_WITH_HINT) {
-            assert(cframe.use_tracing == 0);
             PyObject *owner = TOP();
             PyTypeObject *tp = Py_TYPE(owner);
             SpecializedCacheEntry *caches = GET_CACHE();
@@ -3708,7 +3695,6 @@ check_eval_breaker:
         }
 
         TARGET(STORE_ATTR_SLOT) {
-            assert(cframe.use_tracing == 0);
             PyObject *owner = TOP();
             PyTypeObject *tp = Py_TYPE(owner);
             SpecializedCacheEntry *caches = GET_CACHE();
@@ -3744,7 +3730,6 @@ check_eval_breaker:
         }
 
         TARGET(COMPARE_OP_ADAPTIVE) {
-            assert(cframe.use_tracing == 0);
             SpecializedCacheEntry *cache = GET_CACHE();
             if (cache->adaptive.counter == 0) {
                 PyObject *right = TOP();
@@ -3762,7 +3747,6 @@ check_eval_breaker:
         }
 
         TARGET(COMPARE_OP_FLOAT_JUMP) {
-            assert(cframe.use_tracing == 0);
             // Combined: COMPARE_OP (float ? float) + POP_JUMP_IF_(true/false)
             SpecializedCacheEntry *caches = GET_CACHE();
             int when_to_jump_mask = caches[0].adaptive.index;
@@ -3794,7 +3778,6 @@ check_eval_breaker:
         }
 
         TARGET(COMPARE_OP_INT_JUMP) {
-            assert(cframe.use_tracing == 0);
             // Combined: COMPARE_OP (int ? int) + POP_JUMP_IF_(true/false)
             SpecializedCacheEntry *caches = GET_CACHE();
             int when_to_jump_mask = caches[0].adaptive.index;
@@ -3827,7 +3810,6 @@ check_eval_breaker:
         }
 
         TARGET(COMPARE_OP_STR_JUMP) {
-            assert(cframe.use_tracing == 0);
             // Combined: COMPARE_OP (str == str or str != str) + POP_JUMP_IF_(true/false)
             SpecializedCacheEntry *caches = GET_CACHE();
             int invert = caches[0].adaptive.index;
@@ -4472,7 +4454,6 @@ check_eval_breaker:
         }
 
         TARGET(LOAD_METHOD_ADAPTIVE) {
-            assert(cframe.use_tracing == 0);
             SpecializedCacheEntry *cache = GET_CACHE();
             if (cache->adaptive.counter == 0) {
                 PyObject *owner = TOP();
@@ -4493,7 +4474,6 @@ check_eval_breaker:
 
         TARGET(LOAD_METHOD_CACHED) {
             /* LOAD_METHOD, with cached method object */
-            assert(cframe.use_tracing == 0);
             PyObject *self = TOP();
             PyTypeObject *self_cls = Py_TYPE(self);
             SpecializedCacheEntry *caches = GET_CACHE();
@@ -4535,7 +4515,6 @@ check_eval_breaker:
 
         TARGET(LOAD_METHOD_MODULE) {
             /* LOAD_METHOD, for module methods */
-            assert(cframe.use_tracing == 0);
             PyObject *owner = TOP();
             PyObject *res;
             LOAD_MODULE_ATTR_OR_METHOD(METHOD);
@@ -4547,7 +4526,6 @@ check_eval_breaker:
 
         TARGET(LOAD_METHOD_CLASS) {
             /* LOAD_METHOD, for class methods */
-            assert(cframe.use_tracing == 0);
             SpecializedCacheEntry *caches = GET_CACHE();
             _PyAttrCache *cache1 = &caches[-1].attr;
             _PyObjectCache *cache2 = &caches[-2].obj;
@@ -4785,7 +4763,6 @@ check_eval_breaker:
         }
 
         TARGET(CALL_NO_KW_BUILTIN_O) {
-            assert(cframe.use_tracing == 0);
             assert(STACK_ADJUST_IS_RESET);
             /* Builtin METH_O functions */
 
@@ -4816,7 +4793,6 @@ check_eval_breaker:
         }
 
         TARGET(CALL_NO_KW_BUILTIN_FAST) {
-            assert(cframe.use_tracing == 0);
             assert(STACK_ADJUST_IS_RESET);
             /* Builtin METH_FASTCALL functions, without keywords */
             SpecializedCacheEntry *caches = GET_CACHE();
@@ -4855,7 +4831,6 @@ check_eval_breaker:
         }
 
         TARGET(CALL_NO_KW_LEN) {
-            assert(cframe.use_tracing == 0);
             assert(STACK_ADJUST_IS_RESET);
             /* len(o) */
             SpecializedCacheEntry *caches = GET_CACHE();
@@ -4884,7 +4859,6 @@ check_eval_breaker:
         }
 
         TARGET(CALL_NO_KW_ISINSTANCE) {
-            assert(cframe.use_tracing == 0);
             assert(STACK_ADJUST_IS_RESET);
             /* isinstance(o, o2) */
             SpecializedCacheEntry *caches = GET_CACHE();
@@ -5194,7 +5168,6 @@ check_eval_breaker:
         }
 
         TARGET(BINARY_OP_ADAPTIVE) {
-            assert(cframe.use_tracing == 0);
             SpecializedCacheEntry *cache = GET_CACHE();
             if (cache->adaptive.counter == 0) {
                 PyObject *lhs = SECOND();
