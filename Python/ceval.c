@@ -5422,6 +5422,7 @@ handle_eval_breaker:
 opname ## _miss: \
     { \
         STAT_INC(opname, miss); \
+        STAT_INC(opcode, miss); \
         _PyAdaptiveEntry *cache = &GET_CACHE()->adaptive; \
         cache->counter--; \
         if (cache->counter == 0) { \
@@ -5437,6 +5438,7 @@ opname ## _miss: \
 opname ## _miss: \
     { \
         STAT_INC(opname, miss); \
+        STAT_INC(opcode, miss); \
         uint8_t oparg = _Py_OPARG(next_instr[-1])-1; \
         UPDATE_PREV_INSTR_OPARG(next_instr, oparg); \
         assert(_Py_OPARG(next_instr[-1]) == oparg); \

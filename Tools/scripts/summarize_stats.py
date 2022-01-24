@@ -26,7 +26,7 @@ for name in opcode.opname[1:]:
 TOTAL = "specialization.deferred", "specialization.hit", "specialization.miss", "execution_count"
 
 def print_specialization_stats(name, family_stats):
-    if "specialization.deferred" not in family_stats:
+    if "specialization.deferred" not in family_stats and "specialization.miss" not in family_stats:
         return
     total = sum(family_stats.get(kind, 0) for kind in TOTAL)
     if total == 0:
@@ -38,12 +38,16 @@ def print_specialization_stats(name, family_stats):
         if key.startswith("specialization."):
             label = key[len("specialization."):]
         elif key == "execution_count":
+            if "specialization.deferred" not in family_stats:
+                continue
             label = "unquickened"
         if key not in ("specialization.success",  "specialization.failure"):
             print(f"{label:>12}:{family_stats[key]:>12} {100*family_stats[key]/total:0.1f}%")
-    for key in ("specialization.success",  "specialization.failure"):
-        label = key[len("specialization."):]
-        print(f"  {label}:{family_stats.get(key, 0):>12}")
+    successes = family_stats.get("specialization.success", 0)
+    failures = family_stats.get("specialization.failure", 0)
+    if successes or failures:
+        print(f"  success: {successes:>12}")
+        print(f"  failure: {failures:>12}")
     total_failures = family_stats.get("specialization.failure", 0)
     failure_kinds = [ 0 ] * 30
     for key in family_stats:
