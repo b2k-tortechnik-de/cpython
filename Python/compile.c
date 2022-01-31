@@ -899,6 +899,7 @@ stack_effect(int opcode, int oparg, int jump)
             return 1;
 
         case RETURN_VALUE:
+        case GEN_RETURN:
             return -1;
         case IMPORT_STAR:
             return -1;
@@ -1132,8 +1133,9 @@ compiler_addop_line(struct compiler *c, int opcode, int line,
     i = &b->b_instr[off];
     i->i_opcode = opcode;
     i->i_oparg = 0;
-    if (opcode == RETURN_VALUE)
+    if (opcode == RETURN_VALUE || opcode == GEN_RETURN) {
         b->b_return = 1;
+    }
     i->i_lineno = line;
     i->i_end_lineno = end_line;
     i->i_col_offset = col_offset;
@@ -2658,7 +2660,7 @@ compiler_class(struct compiler *c, stmt_ty s)
             assert(PyDict_GET_SIZE(c->u->u_cellvars) == 0);
             ADDOP_LOAD_CONST(c, Py_None);
         }
-        ADDOP_IN_SCOPE(c, RETURN_VALUE);
+        ADDOP_IN_SCOPE(c, c->u->u_ste->ste_generator ? GEN_RETURN : RETURN_VALUE);
         /* create the code object */
         co = assemble(c, 1);
     }
@@ -2940,7 +2942,7 @@ compiler_lambda(struct compiler *c, expr_ty e)
         co = assemble(c, 0);
     }
     else {
-        ADDOP_IN_SCOPE(c, RETURN_VALUE);
+        ADDOP_IN_SCOPE(c, c->u->u_ste->ste_generator ? GEN_RETURN : RETURN_VALUE);
         co = assemble(c, 1);
     }
     qualname = c->u->u_qualname;
@@ -3154,7 +3156,7 @@ compiler_return(struct compiler *c, stmt_ty s)
     else if (!preserve_tos) {
         ADDOP_LOAD_CONST(c, s->v.Return.value->v.Constant.value);
     }
-    ADDOP(c, RETURN_VALUE);
+    ADDOP(c, c->u->u_ste->ste_generator ? GEN_RETURN : RETURN_VALUE);
     NEXT_BLOCK(c);
 
     return 1;
@@ -5354,7 +5356,7 @@ compiler_comprehension(struct compiler *c, expr_ty e, int type,
         goto error_in_scope;
 
     if (type != COMP_GENEXP) {
-        ADDOP(c, RETURN_VALUE);
+        ADDOP(c, c->u->u_ste->ste_generator ? GEN_RETURN : RETURN_VALUE);
     }
 
     co = assemble(c, 1);
@@ -7093,6 +7095,7 @@ stackdepth(struct compiler *c)
                 instr->i_opcode == JUMP_NO_INTERRUPT ||
                 instr->i_opcode == JUMP_FORWARD ||
                 instr->i_opcode == RETURN_VALUE ||
+                instr->i_opcode == GEN_RETURN ||
                 instr->i_opcode == RAISE_VARARGS ||
                 instr->i_opcode == RERAISE)
             {
@@ -8130,7 +8133,7 @@ guarantee_lineno_for_exits(struct assembler *a, int firstlineno) {
         }
         struct instr *last = &b->b_instr[b->b_iused-1];
         if (last->i_lineno < 0) {
-            if (last->i_opcode == RETURN_VALUE) {
+            if (last->i_opcode == RETURN_VALUE || last->i_opcode == GEN_RETURN) {
                 for (int i = 0; i < b->b_iused; i++) {
                     assert(b->b_instr[i].i_lineno < 0);
 
@@ -8209,7 +8212,7 @@ assemble(struct compiler *c, int addNone)
         UNSET_LOC(c);
         if (addNone)
             ADDOP_LOAD_CONST(c, Py_None);
-        ADDOP(c, RETURN_VALUE);
+        ADDOP(c, c->u->u_ste->ste_generator ? GEN_RETURN : RETURN_VALUE);
     }
 
     for (basicblock *b = c->u->u_blocks; b != NULL; b = b->b_list) {
@@ -8890,6 +8893,7 @@ normalize_basic_block(basicblock *bb) {
     for (int i = 0; i < bb->b_iused; i++) {
         switch(bb->b_instr[i].i_opcode) {
             case RETURN_VALUE:
+            case GEN_RETURN:
             case RAISE_VARARGS:
             case RERAISE:
                 bb->b_exit = 1;

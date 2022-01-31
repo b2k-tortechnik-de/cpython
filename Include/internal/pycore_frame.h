@@ -43,6 +43,7 @@ typedef struct _interpreter_frame {
     PyFrameObject *frame_obj; /* Strong reference, may be NULL */
     struct _interpreter_frame *previous;
     int f_lasti;       /* Last instruction if called */
+    int f_exiti;
     int stacktop;     /* Offset of TOS from localsplus  */
     PyFrameState f_state;  /* What state the frame is in */
     bool is_entry;  // Whether this is the "root" frame for the current CFrame.
@@ -101,6 +102,7 @@ _PyFrame_InitializeSpecials(
     frame->stacktop = nlocalsplus;
     frame->frame_obj = NULL;
     frame->f_lasti = -1;
+    frame->f_exiti = 0;
     frame->f_state = FRAME_CREATED;
     frame->is_entry = false;
     frame->is_generator = false;

@@ -2412,6 +2412,38 @@ handle_eval_breaker:
             goto error;
         }
 
+        TARGET(GEN_RETURN) {
+            PyObject *retval = POP();
+            assert(EMPTY());
+            frame->f_state = FRAME_RETURNED;
+            _PyFrame_SetStackPointer(frame, stack_pointer);
+            TRACE_FUNCTION_EXIT();
+            DTRACE_FUNCTION_EXIT();
+            _Py_LeaveRecursiveCall(tstate);
+            if (!frame->is_entry) {
+                Py_DECREF(retval);
+                InterpreterFrame *gen_frame = frame;
+                frame = cframe.current_frame = gen_frame->previous;
+                PyGenObject *gen = (PyGenObject *)_PyFrame_StackPop(frame);
+                assert(PyGen_CheckExact(gen));
+                assert(((InterpreterFrame *)gen->gi_iframe) == gen_frame);
+                /* TO DO -- Do we need to clear the generator's exception state? */
+                gen_frame->is_generator = false;
+                gen->gi_frame_valid = 0;
+                _PyFrame_Clear(gen_frame);
+                Py_DECREF(gen);
+                assert(frame->f_exiti != 0);
+                frame->f_lasti = frame->f_exiti;
+                goto resume_frame;
+            }
+            /* Restore previous cframe and return. */
+            tstate->cframe = cframe.previous;
+            tstate->cframe->use_tracing = cframe.use_tracing;
+            assert(tstate->cframe->current_frame == frame->previous);
+            assert(!_PyErr_Occurred(tstate));
+            return retval;
+        }
+
         TARGET(RETURN_VALUE) {
             PyObject *retval = POP();
             assert(EMPTY());
@@ -2570,7 +2602,6 @@ handle_eval_breaker:
         }
 
         TARGET(SEND) {
-            assert(frame->is_entry);
             assert(STACK_LEVEL() >= 2);
             PyObject *v = POP();
             PyObject *receiver = TOP();
@@ -2632,13 +2663,17 @@ handle_eval_breaker:
         }
 
         TARGET(YIELD_VALUE) {
-            assert(frame->is_entry);
             PyObject *retval = POP();
             frame->f_state = FRAME_SUSPENDED;
             _PyFrame_SetStackPointer(frame, stack_pointer);
             TRACE_FUNCTION_EXIT();
             DTRACE_FUNCTION_EXIT();
             _Py_LeaveRecursiveCall(tstate);
+            if (!frame->is_entry) {
+                frame = cframe.current_frame = frame->previous;
+                _PyFrame_StackPush(frame, retval);
+                goto resume_frame;
+            }
             /* Restore previous cframe and return. */
             tstate->cframe = cframe.previous;
             tstate->cframe->use_tracing = cframe.use_tracing;
@@ -4211,6 +4246,21 @@ handle_eval_breaker:
             PREDICTED(FOR_ITER);
             /* before: [iter]; after: [iter, iter()] *or* [] */
             PyObject *iter = TOP();
+            if (PyGen_CheckExact(iter)) {
+                PyGenObject *gen = (PyGenObject *)iter;
+                InterpreterFrame *gen_frame = (InterpreterFrame *)gen->gi_iframe;
+                if (gen->gi_frame_valid && _PyFrame_IsRunnable(gen_frame)) {
+                    Py_INCREF(Py_None);
+                    _PyFrame_StackPush(gen_frame, Py_None);
+                    frame->f_exiti = frame->f_lasti + oparg;
+                    _PyFrame_SetStackPointer(frame, stack_pointer);
+                    gen_frame->previous = frame;
+                    cframe.current_frame = frame = gen_frame;
+                    gen_frame->is_entry = false;
+                    CALL_STAT_INC(inlined_py_calls);
+                    goto start_frame;
+                }
+            }
             PyObject *next = (*Py_TYPE(iter)->tp_iternext)(iter);
             if (next != NULL) {
                 PUSH(next);
@@ -5538,7 +5588,17 @@ exit_unwind:
         assert(tstate->cframe->current_frame == frame->previous);
         return NULL;
     }
-    frame = cframe.current_frame = pop_frame(tstate, frame);
+    if (frame->is_generator) {
+        frame->is_generator = false;
+        size_t offset_in_gen = offsetof(PyGenObject, gi_iframe);
+        PyGenObject *gen = (PyGenObject *)(((char *)frame) - offset_in_gen);
+        gen->gi_frame_valid = 0;
+        _PyFrame_Clear(frame);
+        frame = cframe.current_frame = frame->previous;
+    }
+    else {
+        frame = cframe.current_frame = pop_frame(tstate, frame);
+    }
 
 resume_with_error:
     SET_LOCALS_FROM_FRAME();
