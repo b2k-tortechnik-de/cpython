@@ -496,6 +496,9 @@ initial_counter_value(void) {
 #define SPEC_FAIL_BUILTIN_CLASS_METHOD 17
 #define SPEC_FAIL_CLASS_METHOD_OBJ 18
 #define SPEC_FAIL_OBJECT_SLOT 19
+#define SPEC_FAIL_HAS_DICT 20
+#define SPEC_FAIL_HAS_MANAGED_DICT 21
+#define SPEC_FAIL_INSTANCE_ATTRIBUTE 22
 
 /* Binary subscr */
 
@@ -926,7 +929,7 @@ success:
 
 #ifdef Py_STATS
 static int
-load_method_fail_kind(DescriptorClassification kind)
+load_method_fail_kind(DescriptorClassification kind, int cls)
 {
     switch (kind) {
         case OVERRIDING:
@@ -954,7 +957,7 @@ load_method_fail_kind(DescriptorClassification kind)
         case NON_DESCRIPTOR:
             return SPEC_FAIL_NOT_DESCRIPTOR;
         case ABSENT:
-            return SPEC_FAIL_EXPECTED_ERROR;
+            return cls ? SPEC_FAIL_EXPECTED_ERROR : SPEC_FAIL_INSTANCE_ATTRIBUTE;
     }
     Py_UNREACHABLE();
 }
@@ -976,7 +979,7 @@ specialize_class_load_method(PyObject *owner, _Py_CODEUNIT *instr, PyObject *nam
             *instr = _Py_MAKECODEUNIT(LOAD_METHOD_CLASS, _Py_OPARG(*instr));
             return 0;
         default:
-            SPECIALIZATION_FAIL(LOAD_METHOD, load_method_fail_kind(kind));
+            SPECIALIZATION_FAIL(LOAD_METHOD, load_method_fail_kind(kind, 1));
             return -1;
     }
 }
@@ -1018,13 +1021,13 @@ _Py_Specialize_LoadMethod(PyObject *owner, _Py_CODEUNIT *instr, PyObject *name, 
     kind = analyze_descriptor(owner_cls, name, &descr, 0);
     assert(descr != NULL || kind == ABSENT || kind == GETSET_OVERRIDDEN);
     if (kind != METHOD) {
-        SPECIALIZATION_FAIL(LOAD_METHOD, load_method_fail_kind(kind));
+        SPECIALIZATION_FAIL(LOAD_METHOD, load_method_fail_kind(kind, 0));
         goto fail;
     }
     if (owner_cls->tp_flags & Py_TPFLAGS_MANAGED_DICT) {
         PyObject **owner_dictptr = _PyObject_ManagedDictPointer(owner);
         if (*owner_dictptr) {
-            SPECIALIZATION_FAIL(LOAD_METHOD, SPEC_FAIL_IS_ATTR);
+            SPECIALIZATION_FAIL(LOAD_METHOD, SPEC_FAIL_HAS_MANAGED_DICT);
             goto fail;
         }
         PyDictKeysObject *keys = ((PyHeapTypeObject *)owner_cls)->ht_cached_keys;
@@ -1046,7 +1049,7 @@ _Py_Specialize_LoadMethod(PyObject *owner, _Py_CODEUNIT *instr, PyObject *name, 
             *instr = _Py_MAKECODEUNIT(LOAD_METHOD_NO_DICT, _Py_OPARG(*instr));
         }
         else {
-            SPECIALIZATION_FAIL(LOAD_METHOD, SPEC_FAIL_IS_ATTR);
+            SPECIALIZATION_FAIL(LOAD_METHOD, SPEC_FAIL_HAS_DICT);
             goto fail;
         }
     }
