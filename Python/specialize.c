@@ -369,6 +369,8 @@ first_instruction(SpecializedCacheOrInstruction *quickened)
     return &quickened[get_cache_count(quickened)].code[0];
 }
 
+static FILE *callnames = NULL;
+
 /** Insert adaptive instructions and superinstructions.
  *
  * Skip instruction preceded by EXTENDED_ARG for adaptive
@@ -378,6 +380,10 @@ first_instruction(SpecializedCacheOrInstruction *quickened)
 static void
 optimize(SpecializedCacheOrInstruction *quickened, int len)
 {
+    if (callnames == NULL) {
+        callnames = fopen("/tmp/callnames", "a");
+        assert(callnames);
+    }
     _Py_CODEUNIT *instructions = first_instruction(quickened);
     int cache_offset = 0;
     int previous_opcode = -1;
@@ -1563,6 +1569,7 @@ specialize_method_descriptor(
             return 0;
         }
     }
+    fprintf(callnames, "CALL: %s\n", descr->d_method->ml_name);
     SPECIALIZATION_FAIL(PRECALL, builtin_call_fail_kind(descr->d_method->ml_flags));
     return -1;
 }
@@ -1680,6 +1687,7 @@ specialize_c_call(PyObject *callable, _Py_CODEUNIT *instr, int nargs,
             return 0;
         }
         default:
+            fprintf(callnames, "CALL: %s\n", ((PyCFunctionObject *)callable)->m_ml->ml_name);
             SPECIALIZATION_FAIL(PRECALL,
                 builtin_call_fail_kind(PyCFunction_GET_FLAGS(callable)));
             return 1;
