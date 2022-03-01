@@ -308,7 +308,7 @@ _ready:
         RESET_GIL_DROP_REQUEST(interp);
     }
     else {
-        /* bpo-40010: eval_breaker should be recomputed to be set to 1 if there
+        /* bpo-40010: eval_breaker should be recomputed to be set to 2 if there
            is a pending signal: signal received by another thread which cannot
            handle signals.
 

@@ -434,6 +434,14 @@ read32(uint16_t *p)
     return p[0] | (p[1] << 16);
 }
 
+enum InstrumentationStates {
+    /* The low 2 bits must be zero */
+    /* Bit 1 is reserved for interrupts */
+    TRACE_INSTRUMENTED = (1<<2),
+    PROFILE_INSTRUMENTED = (1<<3),
+    TRACE_OPCODE_INSTRUMENTED = (1<<4)
+};
+
 #endif
 
 #ifdef __cplusplus

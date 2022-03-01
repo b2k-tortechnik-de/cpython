@@ -304,6 +304,7 @@ init_code(PyCodeObject *co, struct _PyCodeConstructor *con)
     Py_INCREF(con->qualname);
     co->co_qualname = con->qualname;
     co->co_flags = con->flags;
+    co->co_instrumentation = 0;
 
     Py_INCREF(con->code);
     co->co_code = con->code;

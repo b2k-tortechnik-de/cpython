@@ -61,6 +61,7 @@ struct PyCodeObject {
     PyObject *co_exceptiontable; /* Byte string encoding exception handling table */
     int co_flags;               /* CO_..., see below */
     int co_warmup;              /* Warmup counter for quickening */
+    int co_instrumentation;     /* Current instrumentation state */
 
     // The rest are not so impactful on performance.
     int co_argcount;            /* #arguments, except *args */
