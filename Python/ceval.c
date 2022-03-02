@@ -1293,16 +1293,13 @@ eval_frame_handle_pending(PyThreadState *tstate)
         NEXTOPARG(); \
         PRE_DISPATCH_GOTO(); \
         assert(cframe.use_tracing == 0 || cframe.use_tracing == 255); \
-        opcode |= cframe.use_tracing OR_DTRACE_LINE; \
         DISPATCH_GOTO(); \
     }
 
 #define CHECK_EVAL_BREAKER() \
     do { \
         int eval_state = _Py_atomic_load_relaxed(eval_breaker); \
-        if (eval_state & -3) printf("Eval state %d\n", eval_state); \
-        assert((eval_state & -3) == frame->f_code->co_instrumentation); \
-        if (eval_state & 2) { \
+        if ((eval_state & -3) != frame->f_code->co_instrumentation) { \
             goto handle_eval_breaker; \
         } \
     } while (0);
@@ -1368,7 +1365,6 @@ eval_frame_handle_pending(PyThreadState *tstate)
 #define PREDICT(op) \
     do { \
         _Py_CODEUNIT word = *next_instr; \
-        opcode = _Py_OPCODE(word) | cframe.use_tracing OR_DTRACE_LINE; \
         if (opcode == op) { \
             oparg = _Py_OPARG(word); \
             INSTRUCTION_START(op); \
@@ -1717,6 +1713,11 @@ handle_eval_breaker:
      */
     if (eval_frame_handle_pending(tstate) != 0) {
         goto error;
+    }
+    if ((_Py_atomic_load_relaxed(eval_breaker) & -4) != frame->f_code->co_instrumentation) {
+        if (_PyInstrumentCode(frame->f_code)) {
+            goto error;
+        }
     }
     DISPATCH();
 
@@ -5487,51 +5488,51 @@ handle_eval_breaker:
             Py_UNREACHABLE();
         }
 
-//        TARGET(TRACE) {
-//            int instr_prev = skip_backwards_over_extended_args(frame->f_code, frame->f_lasti);
-//            frame->f_lasti = INSTR_OFFSET();
-//            TRACING_NEXTOPARG();
-//            if (opcode == RESUME) {
-//                if (oparg < 2) {
-//                    CHECK_EVAL_BREAKER();
-//                }
-//                /* Call tracing */
-//                TRACE_FUNCTION_ENTRY();
-//                DTRACE_FUNCTION_ENTRY();
-//            }
-//            else if (frame->f_state > FRAME_CREATED) {
-//                /* line-by-line tracing support */
-//                if (PyDTrace_LINE_ENABLED()) {
-//                    maybe_dtrace_line(frame, &tstate->trace_info, instr_prev);
-//                }
-//
-//                if (cframe.use_tracing &&
-//                    tstate->c_tracefunc != NULL && !tstate->tracing) {
-//                    int err;
-//                    /* see maybe_call_line_trace()
-//                    for expository comments */
-//                    _PyFrame_SetStackPointer(frame, stack_pointer);
-//
-//                    err = maybe_call_line_trace(tstate->c_tracefunc,
-//                                                tstate->c_traceobj,
-//                                                tstate, frame, instr_prev);
-//                    if (err) {
-//                        /* trace function raised an exception */
-//                        next_instr++;
-//                        goto error;
-//                    }
-//                    /* Reload possibly changed frame fields */
-//                    JUMPTO(frame->f_lasti);
-//
-//                    stack_pointer = _PyFrame_GetStackPointer(frame);
-//                    frame->stacktop = -1;
-//                }
-//            }
-//            TRACING_NEXTOPARG();
-//            PRE_DISPATCH_GOTO();
-//            DISPATCH_GOTO();
-//        }
-//
+        TARGET(DO_TRACE) {
+            int instr_prev = skip_backwards_over_extended_args(frame->f_code, frame->f_lasti);
+            frame->f_lasti = INSTR_OFFSET();
+            TRACING_NEXTOPARG();
+            if (opcode == RESUME) {
+                if (oparg < 2) {
+                    CHECK_EVAL_BREAKER();
+                }
+                /* Call tracing */
+                TRACE_FUNCTION_ENTRY();
+                DTRACE_FUNCTION_ENTRY();
+            }
+            else if (frame->f_state > FRAME_CREATED) {
+                /* line-by-line tracing support */
+                if (PyDTrace_LINE_ENABLED()) {
+                    maybe_dtrace_line(frame, &tstate->trace_info, instr_prev);
+                }
+
+                if (cframe.use_tracing &&
+                    tstate->c_tracefunc != NULL && !tstate->tracing) {
+                    int err;
+                    /* see maybe_call_line_trace()
+                    for expository comments */
+                    _PyFrame_SetStackPointer(frame, stack_pointer);
+
+                    err = maybe_call_line_trace(tstate->c_tracefunc,
+                                                tstate->c_traceobj,
+                                                tstate, frame, instr_prev);
+                    if (err) {
+                        /* trace function raised an exception */
+                        next_instr++;
+                        goto error;
+                    }
+                    /* Reload possibly changed frame fields */
+                    JUMPTO(frame->f_lasti);
+
+                    stack_pointer = _PyFrame_GetStackPointer(frame);
+                    frame->stacktop = -1;
+                }
+            }
+            TRACING_NEXTOPARG();
+            PRE_DISPATCH_GOTO();
+            DISPATCH_GOTO();
+        }
+
 #if USE_COMPUTED_GOTOS
         TARGET_DO_TRACING: {
 #else
@@ -6842,6 +6843,16 @@ initialize_trace_info(PyTraceInfo *trace_info, _PyInterpreterFrame *frame)
         trace_info->code = code;
         _PyCode_InitAddressRange(code, &trace_info->bounds);
     }
+}
+
+void
+_PyThreadState_ResumeTracing(PyThreadState *tstate)
+{
+    int use_tracing = (tstate->c_tracefunc != NULL
+                       || tstate->c_profilefunc != NULL);
+    _Py_atomic_store_relaxed(&tstate->interp->ceval.eval_breaker,
+                            use_tracing ? 4 : 0);
+    tstate->cframe->use_tracing = (use_tracing ? 255 : 0);
 }
 
 static int

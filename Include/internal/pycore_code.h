@@ -442,6 +442,8 @@ enum InstrumentationStates {
     TRACE_OPCODE_INSTRUMENTED = (1<<4)
 };
 
+extern int _PyInstrumentCode(PyCodeObject *code);
+
 #endif
 
 #ifdef __cplusplus

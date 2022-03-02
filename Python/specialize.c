@@ -2230,3 +2230,41 @@ _PySpecialization_ClassifyCallable(PyObject *callable)
 }
 
 #endif
+
+int
+_PyInstrumentCode(PyCodeObject *code)
+{
+    // First we need to quicken the code.
+    // Once we quicken inline we will need to
+    // create the original_opcode array.
+    if (_Py_Quicken(code)) {
+        return -1;
+    }
+    // Now iterate over the code inserting the correct instructions.
+    // We need an acurate way to determine line tracing.
+    // TRACE_LINE
+    // TRACE_BACKEDGE
+    // TRACE_OPCODE
+    // PROFILE/TRACE_CALL
+
+    /* This is the dumbest thing that can work */
+    int size = (int)PyBytes_GET_SIZE(code->co_code);
+    _Py_CODEUNIT *original = (_Py_CODEUNIT *)PyBytes_AS_STRING(code->co_code);
+    int i = 0;
+    for (; i < size; i++) {
+        int op = _Py_OPCODE(code->co_firstinstr[i]);
+        if (op == RESUME || op == RESUME_QUICK) {
+            break;
+        }
+    }
+    for (; i < size; i++) {
+        if (_Py_OPCODE(original[i]) == CACHE) {
+            code->co_firstinstr[i] = _Py_MAKECODEUNIT(NOP, 0);
+        }
+        else {
+            code->co_firstinstr[i] = _Py_MAKECODEUNIT(DO_TRACE, _Py_OPARG(code->co_firstinstr[i]));
+        }
+    }
+
+    return 0;
+}

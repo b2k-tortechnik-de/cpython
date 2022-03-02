@@ -145,13 +145,8 @@ _PyThreadState_PauseTracing(PyThreadState *tstate)
     tstate->cframe->use_tracing = 0;
 }
 
-static inline void
-_PyThreadState_ResumeTracing(PyThreadState *tstate)
-{
-    int use_tracing = (tstate->c_tracefunc != NULL
-                       || tstate->c_profilefunc != NULL);
-    tstate->cframe->use_tracing = (use_tracing ? 255 : 0);
-}
+extern void
+_PyThreadState_ResumeTracing(PyThreadState *tstate);
 
 
 /* Other */
