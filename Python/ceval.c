@@ -1253,14 +1253,13 @@ eval_frame_handle_pending(PyThreadState *tstate)
 #ifdef Py_STATS
 #define INSTRUCTION_START(op) \
     do { \
-        frame->f_lasti = INSTR_OFFSET(); \
         next_instr++; \
         OPCODE_EXE_INC(op); \
         _py_stats.opcode_stats[lastopcode].pair_count[op]++; \
         lastopcode = op; \
     } while (0)
 #else
-#define INSTRUCTION_START(op) frame->f_lasti = INSTR_OFFSET(); next_instr++
+#define INSTRUCTION_START(op) next_instr++
 #endif
 
 #if USE_COMPUTED_GOTOS
@@ -1320,6 +1319,9 @@ eval_frame_handle_pending(PyThreadState *tstate)
     } while (0)
 #define JUMPTO(x)       (next_instr = first_instr + (x))
 #define JUMPBY(x)       (next_instr += (x))
+
+#define SAVE_IP() frame->f_lasti = INSTR_OFFSET()-1
+#define RESTORE_IP() next_instr = first_instr + frame->f_lasti+1
 
 // Skip from a PRECALL over a CALL to the next instruction:
 #define SKIP_CALL() \
@@ -1709,6 +1711,7 @@ handle_eval_breaker:
      * All loops should include a check of the eval breaker.
      * We also check on return from any builtin function.
      */
+    SAVE_IP();
     if (eval_frame_handle_pending(tstate) != 0) {
         goto error;
     }
@@ -1878,6 +1881,7 @@ handle_eval_breaker:
 
         TARGET(UNARY_POSITIVE) {
             PyObject *value = TOP();
+            SAVE_IP();
             PyObject *res = PyNumber_Positive(value);
             Py_DECREF(value);
             SET_TOP(res);
@@ -1888,6 +1892,7 @@ handle_eval_breaker:
 
         TARGET(UNARY_NEGATIVE) {
             PyObject *value = TOP();
+            SAVE_IP();
             PyObject *res = PyNumber_Negative(value);
             Py_DECREF(value);
             SET_TOP(res);
@@ -1898,6 +1903,7 @@ handle_eval_breaker:
 
         TARGET(UNARY_NOT) {
             PyObject *value = TOP();
+            SAVE_IP();
             int err = PyObject_IsTrue(value);
             Py_DECREF(value);
             if (err == 0) {
@@ -1916,6 +1922,7 @@ handle_eval_breaker:
 
         TARGET(UNARY_INVERT) {
             PyObject *value = TOP();
+            SAVE_IP();
             PyObject *res = PyNumber_Invert(value);
             Py_DECREF(value);
             SET_TOP(res);
@@ -1931,6 +1938,7 @@ handle_eval_breaker:
             DEOPT_IF(!PyLong_CheckExact(left), BINARY_OP);
             DEOPT_IF(!PyLong_CheckExact(right), BINARY_OP);
             STAT_INC(BINARY_OP, hit);
+            SAVE_IP();
             PyObject *prod = _PyLong_Multiply((PyLongObject *)left, (PyLongObject *)right);
             SET_SECOND(prod);
             Py_DECREF(right);
@@ -1971,6 +1979,7 @@ handle_eval_breaker:
             DEOPT_IF(!PyLong_CheckExact(left), BINARY_OP);
             DEOPT_IF(!PyLong_CheckExact(right), BINARY_OP);
             STAT_INC(BINARY_OP, hit);
+            SAVE_IP();
             PyObject *sub = _PyLong_Subtract((PyLongObject *)left, (PyLongObject *)right);
             SET_SECOND(sub);
             Py_DECREF(right);
@@ -2010,6 +2019,7 @@ handle_eval_breaker:
             DEOPT_IF(!PyUnicode_CheckExact(left), BINARY_OP);
             DEOPT_IF(Py_TYPE(right) != Py_TYPE(left), BINARY_OP);
             STAT_INC(BINARY_OP, hit);
+            SAVE_IP();
             PyObject *res = PyUnicode_Concat(left, right);
             STACK_SHRINK(1);
             SET_TOP(res);
@@ -2044,6 +2054,7 @@ handle_eval_breaker:
             GETLOCAL(next_oparg) = NULL;
             Py_DECREF(left);
             STACK_SHRINK(1);
+            SAVE_IP();
             PyUnicode_Append(&TOP(), right);
             Py_DECREF(right);
             if (TOP() == NULL) {
@@ -2081,6 +2092,7 @@ handle_eval_breaker:
             DEOPT_IF(!PyLong_CheckExact(left), BINARY_OP);
             DEOPT_IF(Py_TYPE(right) != Py_TYPE(left), BINARY_OP);
             STAT_INC(BINARY_OP, hit);
+            SAVE_IP();
             PyObject *sum = _PyLong_Add((PyLongObject *)left, (PyLongObject *)right);
             SET_SECOND(sum);
             Py_DECREF(right);
@@ -2097,6 +2109,7 @@ handle_eval_breaker:
             PREDICTED(BINARY_SUBSCR);
             PyObject *sub = POP();
             PyObject *container = TOP();
+            SAVE_IP();
             PyObject *res = PyObject_GetItem(container, sub);
             Py_DECREF(container);
             Py_DECREF(sub);
@@ -2113,6 +2126,7 @@ handle_eval_breaker:
                 PyObject *sub = TOP();
                 PyObject *container = SECOND();
                 next_instr--;
+                SAVE_IP();
                 if (_Py_Specialize_BinarySubscr(container, sub, next_instr) < 0) {
                     goto error;
                 }
@@ -2181,6 +2195,7 @@ handle_eval_breaker:
             DEOPT_IF(!PyDict_CheckExact(SECOND()), BINARY_SUBSCR);
             STAT_INC(BINARY_SUBSCR, hit);
             PyObject *sub = TOP();
+            SAVE_IP();
             PyObject *res = PyDict_GetItemWithError(dict, sub);
             if (res == NULL) {
                 goto binary_subscr_dict_error;
@@ -2224,7 +2239,8 @@ handle_eval_breaker:
                 new_frame->localsplus[i] = NULL;
             }
             _PyFrame_SetStackPointer(frame, stack_pointer);
-            frame->f_lasti += INLINE_CACHE_ENTRIES_BINARY_SUBSCR;
+            next_instr += INLINE_CACHE_ENTRIES_BINARY_SUBSCR;
+            SAVE_IP();
             new_frame->previous = frame;
             frame = cframe.current_frame = new_frame;
             CALL_STAT_INC(inlined_py_calls);
@@ -2235,6 +2251,7 @@ handle_eval_breaker:
             PyObject *v = POP();
             PyObject *list = PEEK(oparg);
             int err;
+            SAVE_IP();
             err = PyList_Append(list, v);
             Py_DECREF(v);
             if (err != 0)
@@ -2247,6 +2264,7 @@ handle_eval_breaker:
             PyObject *v = POP();
             PyObject *set = PEEK(oparg);
             int err;
+            SAVE_IP();
             err = PySet_Add(set, v);
             Py_DECREF(v);
             if (err != 0)
@@ -2263,6 +2281,7 @@ handle_eval_breaker:
             int err;
             STACK_SHRINK(3);
             /* container[sub] = v */
+            SAVE_IP();
             err = PyObject_SetItem(container, sub, v);
             Py_DECREF(v);
             Py_DECREF(container);
@@ -2280,6 +2299,7 @@ handle_eval_breaker:
                 PyObject *sub = TOP();
                 PyObject *container = SECOND();
                 next_instr--;
+                SAVE_IP();
                 if (_Py_Specialize_StoreSubscr(container, sub, next_instr) < 0) {
                     goto error;
                 }
@@ -2326,6 +2346,7 @@ handle_eval_breaker:
             DEOPT_IF(!PyDict_CheckExact(dict), STORE_SUBSCR);
             STACK_SHRINK(3);
             STAT_INC(STORE_SUBSCR, hit);
+            SAVE_IP();
             int err = _PyDict_SetItem_Take2((PyDictObject *)dict, sub, value);
             Py_DECREF(dict);
             if (err != 0) {
@@ -2341,6 +2362,7 @@ handle_eval_breaker:
             int err;
             STACK_SHRINK(2);
             /* del container[sub] */
+            SAVE_IP();
             err = PyObject_DelItem(container, sub);
             Py_DECREF(container);
             Py_DECREF(sub);
@@ -2350,6 +2372,7 @@ handle_eval_breaker:
         }
 
         TARGET(PRINT_EXPR) {
+            SAVE_IP();
             PyObject *value = POP();
             PyObject *hook = _PySys_GetAttr(tstate, &_Py_ID(displayhook));
             PyObject *res;
@@ -2368,6 +2391,7 @@ handle_eval_breaker:
         }
 
         TARGET(RAISE_VARARGS) {
+            SAVE_IP();
             PyObject *cause = NULL, *exc = NULL;
             switch (oparg) {
             case 2:
@@ -2390,6 +2414,7 @@ handle_eval_breaker:
         }
 
         TARGET(RETURN_VALUE) {
+            SAVE_IP();
             PyObject *retval = POP();
             assert(EMPTY());
             frame->f_state = FRAME_RETURNED;
@@ -2411,6 +2436,7 @@ handle_eval_breaker:
         }
 
         TARGET(GET_AITER) {
+            SAVE_IP();
             unaryfunc getter = NULL;
             PyObject *iter = NULL;
             PyObject *obj = TOP();
@@ -2455,6 +2481,7 @@ handle_eval_breaker:
         }
 
         TARGET(GET_ANEXT) {
+            SAVE_IP();
             unaryfunc getter = NULL;
             PyObject *next_iter = NULL;
             PyObject *awaitable = NULL;
@@ -2506,6 +2533,7 @@ handle_eval_breaker:
         }
 
         TARGET(GET_AWAITABLE) {
+            SAVE_IP();
             PREDICTED(GET_AWAITABLE);
             PyObject *iterable = TOP();
             PyObject *iter = _PyCoro_GetAwaitableIter(iterable);
@@ -2541,6 +2569,7 @@ handle_eval_breaker:
         }
 
         TARGET(SEND) {
+            SAVE_IP();
             assert(frame->is_entry);
             assert(STACK_LEVEL() >= 2);
             PyObject *v = POP();
@@ -2590,6 +2619,7 @@ handle_eval_breaker:
         }
 
         TARGET(ASYNC_GEN_WRAP) {
+            SAVE_IP();
             PyObject *v = TOP();
             assert(frame->f_code->co_flags & CO_ASYNC_GENERATOR);
             PyObject *w = _PyAsyncGenValueWrapperNew(v);
@@ -2602,6 +2632,7 @@ handle_eval_breaker:
         }
 
         TARGET(YIELD_VALUE) {
+            SAVE_IP();
             assert(frame->is_entry);
             PyObject *retval = POP();
             frame->f_state = FRAME_SUSPENDED;
@@ -2626,6 +2657,7 @@ handle_eval_breaker:
         }
 
         TARGET(RERAISE) {
+            SAVE_IP();
             if (oparg) {
                 PyObject *lasti = PEEK(oparg + 1);
                 if (PyLong_Check(lasti)) {
@@ -2647,6 +2679,7 @@ handle_eval_breaker:
         }
 
         TARGET(PREP_RERAISE_STAR) {
+            SAVE_IP();
             PyObject *excs = POP();
             assert(PyList_Check(excs));
             PyObject *orig = POP();
@@ -2664,6 +2697,7 @@ handle_eval_breaker:
         }
 
         TARGET(END_ASYNC_FOR) {
+            SAVE_IP();
             PyObject *val = POP();
             assert(val && PyExceptionInstance_Check(val));
             if (PyErr_GivenExceptionMatches(val, PyExc_StopAsyncIteration)) {
@@ -2687,6 +2721,7 @@ handle_eval_breaker:
         }
 
         TARGET(LOAD_BUILD_CLASS) {
+            SAVE_IP();
             PyObject *bc;
             if (PyDict_CheckExact(BUILTINS())) {
                 bc = _PyDict_GetItemWithError(BUILTINS(),
@@ -2714,6 +2749,7 @@ handle_eval_breaker:
         }
 
         TARGET(STORE_NAME) {
+            SAVE_IP();
             PyObject *name = GETITEM(names, oparg);
             PyObject *v = POP();
             PyObject *ns = LOCALS();
@@ -2735,6 +2771,7 @@ handle_eval_breaker:
         }
 
         TARGET(DELETE_NAME) {
+            SAVE_IP();
             PyObject *name = GETITEM(names, oparg);
             PyObject *ns = LOCALS();
             int err;
@@ -2754,6 +2791,7 @@ handle_eval_breaker:
         }
 
         TARGET(UNPACK_SEQUENCE) {
+            SAVE_IP();
             PREDICTED(UNPACK_SEQUENCE);
             PyObject *seq = POP();
             PyObject **top = stack_pointer + oparg;
@@ -2826,6 +2864,7 @@ handle_eval_breaker:
         }
 
         TARGET(UNPACK_EX) {
+            SAVE_IP();
             int totalargs = 1 + (oparg & 0xFF) + (oparg >> 8);
             PyObject *seq = POP();
             PyObject **top = stack_pointer + totalargs;
@@ -2839,6 +2878,7 @@ handle_eval_breaker:
         }
 
         TARGET(STORE_ATTR) {
+            SAVE_IP();
             PREDICTED(STORE_ATTR);
             PyObject *name = GETITEM(names, oparg);
             PyObject *owner = TOP();
@@ -2856,6 +2896,7 @@ handle_eval_breaker:
         }
 
         TARGET(DELETE_ATTR) {
+            SAVE_IP();
             PyObject *name = GETITEM(names, oparg);
             PyObject *owner = POP();
             int err;
@@ -2867,6 +2908,7 @@ handle_eval_breaker:
         }
 
         TARGET(STORE_GLOBAL) {
+            SAVE_IP();
             PyObject *name = GETITEM(names, oparg);
             PyObject *v = POP();
             int err;
@@ -2878,6 +2920,7 @@ handle_eval_breaker:
         }
 
         TARGET(DELETE_GLOBAL) {
+            SAVE_IP();
             PyObject *name = GETITEM(names, oparg);
             int err;
             err = PyDict_DelItem(GLOBALS(), name);
@@ -2892,6 +2935,7 @@ handle_eval_breaker:
         }
 
         TARGET(LOAD_NAME) {
+            SAVE_IP();
             PyObject *name = GETITEM(names, oparg);
             PyObject *locals = LOCALS();
             PyObject *v;
@@ -2956,6 +3000,7 @@ handle_eval_breaker:
         }
 
         TARGET(LOAD_GLOBAL) {
+            SAVE_IP();
             PREDICTED(LOAD_GLOBAL);
             PyObject *name = GETITEM(names, oparg);
             PyObject *v;
@@ -3098,6 +3143,7 @@ handle_eval_breaker:
         }
 
         TARGET(LOAD_CLASSDEREF) {
+            SAVE_IP();
             PyObject *name, *value, *locals = LOCALS();
             assert(locals);
             assert(oparg >= 0 && oparg < frame->f_code->co_nlocalsplus);
@@ -3169,6 +3215,7 @@ handle_eval_breaker:
         }
 
         TARGET(BUILD_STRING) {
+            SAVE_IP();
             PyObject *str;
             PyObject *empty = PyUnicode_New(0, 0);
             if (empty == NULL) {
@@ -3187,6 +3234,7 @@ handle_eval_breaker:
         }
 
         TARGET(BUILD_TUPLE) {
+            SAVE_IP();
             PyObject *tup = PyTuple_New(oparg);
             if (tup == NULL)
                 goto error;
@@ -3199,6 +3247,7 @@ handle_eval_breaker:
         }
 
         TARGET(BUILD_LIST) {
+            SAVE_IP();
             PyObject *list =  PyList_New(oparg);
             if (list == NULL)
                 goto error;
@@ -3211,6 +3260,7 @@ handle_eval_breaker:
         }
 
         TARGET(LIST_TO_TUPLE) {
+            SAVE_IP();
             PyObject *list = POP();
             PyObject *tuple = PyList_AsTuple(list);
             Py_DECREF(list);
@@ -3222,6 +3272,7 @@ handle_eval_breaker:
         }
 
         TARGET(LIST_EXTEND) {
+            SAVE_IP();
             PyObject *iterable = POP();
             PyObject *list = PEEK(oparg);
             PyObject *none_val = _PyList_Extend((PyListObject *)list, iterable);
@@ -3243,6 +3294,7 @@ handle_eval_breaker:
         }
 
         TARGET(SET_UPDATE) {
+            SAVE_IP();
             PyObject *iterable = POP();
             PyObject *set = PEEK(oparg);
             int err = _PySet_Update(set, iterable);
@@ -3254,6 +3306,7 @@ handle_eval_breaker:
         }
 
         TARGET(BUILD_SET) {
+            SAVE_IP();
             PyObject *set = PySet_New(NULL);
             int err = 0;
             int i;
@@ -3275,6 +3328,7 @@ handle_eval_breaker:
         }
 
         TARGET(BUILD_MAP) {
+            SAVE_IP();
             PyObject *map = _PyDict_FromItems(
                     &PEEK(2*oparg), 2,
                     &PEEK(2*oparg - 1), 2,
@@ -3291,6 +3345,7 @@ handle_eval_breaker:
         }
 
         TARGET(SETUP_ANNOTATIONS) {
+            SAVE_IP();
             int err;
             PyObject *ann_dict;
             if (LOCALS() == NULL) {
@@ -3346,6 +3401,7 @@ handle_eval_breaker:
         }
 
         TARGET(BUILD_CONST_KEY_MAP) {
+            SAVE_IP();
             PyObject *map;
             PyObject *keys = TOP();
             if (!PyTuple_CheckExact(keys) ||
@@ -3370,6 +3426,7 @@ handle_eval_breaker:
         }
 
         TARGET(DICT_UPDATE) {
+            SAVE_IP();
             PyObject *update = POP();
             PyObject *dict = PEEK(oparg);
             if (PyDict_Update(dict, update) < 0) {
@@ -3386,6 +3443,7 @@ handle_eval_breaker:
         }
 
         TARGET(DICT_MERGE) {
+            SAVE_IP();
             PyObject *update = POP();
             PyObject *dict = PEEK(oparg);
 
@@ -3400,6 +3458,7 @@ handle_eval_breaker:
         }
 
         TARGET(MAP_ADD) {
+            SAVE_IP();
             PyObject *value = TOP();
             PyObject *key = SECOND();
             PyObject *map;
@@ -3415,6 +3474,7 @@ handle_eval_breaker:
         }
 
         TARGET(LOAD_ATTR) {
+            SAVE_IP();
             PREDICTED(LOAD_ATTR);
             PyObject *name = GETITEM(names, oparg);
             PyObject *owner = TOP();
@@ -3483,6 +3543,7 @@ handle_eval_breaker:
         }
 
         TARGET(LOAD_ATTR_WITH_HINT) {
+            SAVE_IP();
             assert(cframe.use_tracing == 0);
             PyObject *owner = TOP();
             PyObject *res;
@@ -3585,6 +3646,7 @@ handle_eval_breaker:
         }
 
         TARGET(STORE_ATTR_WITH_HINT) {
+            SAVE_IP();
             assert(cframe.use_tracing == 0);
             PyObject *owner = TOP();
             PyTypeObject *tp = Py_TYPE(owner);
@@ -3652,6 +3714,7 @@ handle_eval_breaker:
         }
 
         TARGET(COMPARE_OP) {
+            SAVE_IP();
             PREDICTED(COMPARE_OP);
             assert(oparg <= Py_GE);
             PyObject *right = POP();
@@ -3803,6 +3866,7 @@ handle_eval_breaker:
         }
 
         TARGET(CONTAINS_OP) {
+            SAVE_IP();
             PyObject *right = POP();
             PyObject *left = POP();
             int res = PySequence_Contains(right, left);
@@ -3820,6 +3884,7 @@ handle_eval_breaker:
         }
 
         TARGET(JUMP_IF_NOT_EG_MATCH) {
+            SAVE_IP();
             PyObject *match_type = POP();
             if (check_except_star_type_valid(tstate, match_type) < 0) {
                 Py_DECREF(match_type);
@@ -3871,6 +3936,7 @@ handle_eval_breaker:
         }
 
         TARGET(JUMP_IF_NOT_EXC_MATCH) {
+            SAVE_IP();
             PyObject *right = POP();
             PyObject *left = TOP();
             assert(PyExceptionInstance_Check(left));
@@ -3888,6 +3954,7 @@ handle_eval_breaker:
         }
 
         TARGET(IMPORT_NAME) {
+            SAVE_IP();
             PyObject *name = GETITEM(names, oparg);
             PyObject *fromlist = POP();
             PyObject *level = TOP();
@@ -3902,6 +3969,7 @@ handle_eval_breaker:
         }
 
         TARGET(IMPORT_STAR) {
+            SAVE_IP();
             PyObject *from = POP(), *locals;
             int err;
             if (_PyFrame_FastToLocalsWithError(frame) < 0) {
@@ -3925,6 +3993,7 @@ handle_eval_breaker:
         }
 
         TARGET(IMPORT_FROM) {
+            SAVE_IP();
             PyObject *name = GETITEM(names, oparg);
             PyObject *from = TOP();
             PyObject *res;
@@ -3954,6 +4023,7 @@ handle_eval_breaker:
                 CHECK_EVAL_BREAKER();
                 DISPATCH();
             }
+            SAVE_IP();
             err = PyObject_IsTrue(cond);
             Py_DECREF(cond);
             if (err > 0)
@@ -3981,6 +4051,7 @@ handle_eval_breaker:
                 CHECK_EVAL_BREAKER();
                 DISPATCH();
             }
+            SAVE_IP();
             err = PyObject_IsTrue(cond);
             Py_DECREF(cond);
             if (err > 0) {
@@ -4030,6 +4101,7 @@ handle_eval_breaker:
                 JUMPTO(oparg);
                 DISPATCH();
             }
+            SAVE_IP();
             err = PyObject_IsTrue(cond);
             if (err > 0) {
                 STACK_SHRINK(1);
@@ -4054,6 +4126,7 @@ handle_eval_breaker:
                 JUMPTO(oparg);
                 DISPATCH();
             }
+            SAVE_IP();
             err = PyObject_IsTrue(cond);
             if (err > 0) {
                 JUMPTO(oparg);
@@ -4102,6 +4175,7 @@ handle_eval_breaker:
         }
 
         TARGET(GET_LEN) {
+            SAVE_IP();
             // PUSH(len(TOS))
             Py_ssize_t len_i = PyObject_Length(TOP());
             if (len_i < 0) {
@@ -4116,6 +4190,7 @@ handle_eval_breaker:
         }
 
         TARGET(MATCH_CLASS) {
+            SAVE_IP();
             // Pop TOS and TOS1. Set TOS to a tuple of attributes on success, or
             // None on failure.
             PyObject *names = POP();
@@ -4164,6 +4239,7 @@ handle_eval_breaker:
         }
 
         TARGET(MATCH_KEYS) {
+            SAVE_IP();
             // On successful match, PUSH(values). Otherwise, PUSH(None).
             PyObject *keys = TOP();
             PyObject *subject = SECOND();
@@ -4176,6 +4252,7 @@ handle_eval_breaker:
         }
 
         TARGET(GET_ITER) {
+            SAVE_IP();
             /* before: [obj]; after [getiter(obj)] */
             PyObject *iterable = TOP();
             PyObject *iter = PyObject_GetIter(iterable);
@@ -4188,6 +4265,7 @@ handle_eval_breaker:
         }
 
         TARGET(GET_YIELD_FROM_ITER) {
+            SAVE_IP();
             /* before: [obj]; after [getiter(obj)] */
             PyObject *iterable = TOP();
             PyObject *iter;
@@ -4218,6 +4296,7 @@ handle_eval_breaker:
 
         TARGET(FOR_ITER) {
             PREDICTED(FOR_ITER);
+            SAVE_IP();
             /* before: [iter]; after: [iter, iter()] *or* [] */
             PyObject *iter = TOP();
 #ifdef Py_STATS
@@ -4249,6 +4328,7 @@ handle_eval_breaker:
         }
 
         TARGET(BEFORE_ASYNC_WITH) {
+            SAVE_IP();
             PyObject *mgr = TOP();
             PyObject *res;
             PyObject *enter = _PyObject_LookupSpecial(mgr, &_Py_ID(__aenter__));
@@ -4285,6 +4365,7 @@ handle_eval_breaker:
         }
 
         TARGET(BEFORE_WITH) {
+            SAVE_IP();
             PyObject *mgr = TOP();
             PyObject *res;
             PyObject *enter = _PyObject_LookupSpecial(mgr, &_Py_ID(__enter__));
@@ -4321,6 +4402,7 @@ handle_eval_breaker:
         }
 
         TARGET(WITH_EXCEPT_START) {
+            SAVE_IP();
             /* At the top of the stack are 4 values:
                - TOP = exc_info()
                - SECOND = previous exception
@@ -4371,6 +4453,7 @@ handle_eval_breaker:
 
         TARGET(LOAD_METHOD) {
             PREDICTED(LOAD_METHOD);
+            SAVE_IP();
             /* Designed to work in tandem with CALL_METHOD. */
             PyObject *name = GETITEM(names, oparg);
             PyObject *obj = TOP();
@@ -4643,12 +4726,14 @@ handle_eval_breaker:
                     goto error;
                 }
                 _PyFrame_SetStackPointer(frame, stack_pointer);
-                frame->f_lasti += INLINE_CACHE_ENTRIES_CALL;
+                next_instr += INLINE_CACHE_ENTRIES_CALL;
+                SAVE_IP();
                 new_frame->previous = frame;
                 cframe.current_frame = frame = new_frame;
                 CALL_STAT_INC(inlined_py_calls);
                 goto start_frame;
             }
+            SAVE_IP();
             /* Callable is not a normal Python function */
             PyObject *res;
             if (cframe.use_tracing) {
@@ -4748,7 +4833,8 @@ handle_eval_breaker:
             }
             STACK_SHRINK(2-is_meth);
             _PyFrame_SetStackPointer(frame, stack_pointer);
-            frame->f_lasti += INLINE_CACHE_ENTRIES_CALL;
+            next_instr += INLINE_CACHE_ENTRIES_CALL;
+            SAVE_IP();
             new_frame->previous = frame;
             frame = cframe.current_frame = new_frame;
             goto start_frame;
@@ -4788,7 +4874,8 @@ handle_eval_breaker:
             }
             STACK_SHRINK(2-is_meth);
             _PyFrame_SetStackPointer(frame, stack_pointer);
-            frame->f_lasti += INLINE_CACHE_ENTRIES_CALL;
+            next_instr += INLINE_CACHE_ENTRIES_CALL;
+            SAVE_IP();
             new_frame->previous = frame;
             frame = cframe.current_frame = new_frame;
             goto start_frame;
@@ -4820,6 +4907,7 @@ handle_eval_breaker:
             PyObject *callable = PEEK(2);
             DEOPT_IF(callable != (PyObject *)&PyUnicode_Type, PRECALL);
             STAT_INC(PRECALL, hit);
+            SAVE_IP();
             SKIP_CALL();
             PyObject *arg = TOP();
             PyObject *res = PyObject_Str(arg);
@@ -4841,6 +4929,7 @@ handle_eval_breaker:
             PyObject *callable = PEEK(2);
             DEOPT_IF(callable != (PyObject *)&PyTuple_Type, PRECALL);
             STAT_INC(PRECALL, hit);
+            SAVE_IP();
             SKIP_CALL();
             PyObject *arg = TOP();
             PyObject *res = PySequence_Tuple(arg);
@@ -4864,6 +4953,7 @@ handle_eval_breaker:
             PyTypeObject *tp = (PyTypeObject *)callable;
             DEOPT_IF(tp->tp_vectorcall == NULL, PRECALL);
             STAT_INC(PRECALL, hit);
+            SAVE_IP();
             SKIP_CALL();
             STACK_SHRINK(total_args);
             PyObject *res = tp->tp_vectorcall((PyObject *)tp, stack_pointer,
@@ -4894,6 +4984,7 @@ handle_eval_breaker:
             DEOPT_IF(!PyCFunction_CheckExact(callable), PRECALL);
             DEOPT_IF(PyCFunction_GET_FLAGS(callable) != METH_O, PRECALL);
             STAT_INC(PRECALL, hit);
+            SAVE_IP();
             SKIP_CALL();
             PyCFunction cfunc = PyCFunction_GET_FUNCTION(callable);
             // This is slower but CPython promises to check all non-vectorcall
@@ -4928,6 +5019,7 @@ handle_eval_breaker:
             DEOPT_IF(PyCFunction_GET_FLAGS(callable) != METH_FASTCALL,
                 PRECALL);
             STAT_INC(PRECALL, hit);
+            SAVE_IP();
             SKIP_CALL();
             PyCFunction cfunc = PyCFunction_GET_FUNCTION(callable);
             STACK_SHRINK(total_args);
@@ -4967,6 +5059,7 @@ handle_eval_breaker:
             DEOPT_IF(PyCFunction_GET_FLAGS(callable) !=
                 (METH_FASTCALL | METH_KEYWORDS), PRECALL);
             STAT_INC(PRECALL, hit);
+            SAVE_IP();
             SKIP_CALL();
             STACK_SHRINK(total_args);
             /* res = func(self, args, nargs, kwnames) */
@@ -5007,6 +5100,7 @@ handle_eval_breaker:
             PyInterpreterState *interp = _PyInterpreterState_GET();
             DEOPT_IF(callable != interp->callable_cache.len, PRECALL);
             STAT_INC(PRECALL, hit);
+            SAVE_IP();
             SKIP_CALL();
             PyObject *arg = TOP();
             Py_ssize_t len_i = PyObject_Length(arg);
@@ -5037,6 +5131,7 @@ handle_eval_breaker:
             PyInterpreterState *interp = _PyInterpreterState_GET();
             DEOPT_IF(callable != interp->callable_cache.isinstance, PRECALL);
             STAT_INC(PRECALL, hit);
+            SAVE_IP();
             SKIP_CALL();
             PyObject *cls = POP();
             PyObject *inst = TOP();
@@ -5069,6 +5164,7 @@ handle_eval_breaker:
             PyObject *list = SECOND();
             DEOPT_IF(!PyList_Check(list), PRECALL);
             STAT_INC(PRECALL, hit);
+            SAVE_IP();
             SKIP_CALL();
             PyObject *arg = TOP();
             int err = PyList_Append(list, arg);
@@ -5094,6 +5190,7 @@ handle_eval_breaker:
             PyMethodDef *meth = ((PyMethodDescrObject *)callable)->d_method;
             DEOPT_IF(meth->ml_flags != METH_O, PRECALL);
             STAT_INC(PRECALL, hit);
+            SAVE_IP();
             SKIP_CALL();
             PyCFunction cfunc = meth->ml_meth;
             // This is slower but CPython promises to check all non-vectorcall
@@ -5129,6 +5226,7 @@ handle_eval_breaker:
             PyMethodDef *meth = ((PyMethodDescrObject *)callable)->d_method;
             DEOPT_IF(meth->ml_flags != METH_NOARGS, PRECALL);
             STAT_INC(PRECALL, hit);
+            SAVE_IP();
             SKIP_CALL();
             PyCFunction cfunc = meth->ml_meth;
             // This is slower but CPython promises to check all non-vectorcall
@@ -5161,6 +5259,7 @@ handle_eval_breaker:
             PyMethodDef *meth = ((PyMethodDescrObject *)callable)->d_method;
             DEOPT_IF(meth->ml_flags != METH_FASTCALL, PRECALL);
             STAT_INC(PRECALL, hit);
+            SAVE_IP();
             SKIP_CALL();
             _PyCFunctionFast cfunc = (_PyCFunctionFast)(void(*)(void))meth->ml_meth;
             int nargs = total_args-1;
@@ -5185,6 +5284,7 @@ handle_eval_breaker:
 
         TARGET(CALL_FUNCTION_EX) {
             PREDICTED(CALL_FUNCTION_EX);
+            SAVE_IP();
             PyObject *func, *callargs, *kwargs = NULL, *result;
             if (oparg & 0x01) {
                 kwargs = POP();
@@ -5233,6 +5333,7 @@ handle_eval_breaker:
         }
 
         TARGET(MAKE_FUNCTION) {
+            SAVE_IP();
             PyObject *codeobj = POP();
             PyFunctionObject *func = (PyFunctionObject *)
                 PyFunction_New(codeobj, GLOBALS());
@@ -5264,6 +5365,7 @@ handle_eval_breaker:
         }
 
         TARGET(RETURN_GENERATOR) {
+            SAVE_IP();
             PyGenObject *gen = (PyGenObject *)_Py_MakeCoro(frame->f_func);
             if (gen == NULL) {
                 goto error;
@@ -5298,6 +5400,7 @@ handle_eval_breaker:
         }
 
         TARGET(BUILD_SLICE) {
+            SAVE_IP();
             PyObject *start, *stop, *step, *slice;
             if (oparg == 3)
                 step = POP();
@@ -5316,6 +5419,7 @@ handle_eval_breaker:
         }
 
         TARGET(FORMAT_VALUE) {
+            SAVE_IP();
             /* Handles f-string value formatting. */
             PyObject *result;
             PyObject *fmt_spec;
@@ -5385,6 +5489,7 @@ handle_eval_breaker:
 
         TARGET(BINARY_OP) {
             PREDICTED(BINARY_OP);
+            SAVE_IP();
             PyObject *rhs = POP();
             PyObject *lhs = TOP();
             assert(0 <= oparg);
@@ -5556,6 +5661,7 @@ unbound_local_error:
         }
 
 error:
+        SAVE_IP();
         call_shape.kwnames = NULL;
         /* Double-check exception status. */
 #ifdef NDEBUG

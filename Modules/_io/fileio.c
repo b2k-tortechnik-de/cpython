@@ -87,12 +87,14 @@ _PyFileIO_closed(PyObject *self)
    the refcount is 0 (that is, not directly from tp_dealloc unless
    the refcount has been temporarily re-incremented). */
 static PyObject *
-fileio_dealloc_warn(fileio *self, PyObject *source)
+fileio_dealloc_warn2(fileio *self, PyObject *source, int finalizing)
 {
     if (self->fd >= 0 && self->closefd) {
         PyObject *exc, *val, *tb;
         PyErr_Fetch(&exc, &val, &tb);
-        if (PyErr_ResourceWarning(source, 1, "unclosed file %R", source)) {
+        char *fmt = finalizing ? "unclosed file %R"
+            : "unclosed file %R (location maybe approximate)";
+        if (PyErr_ResourceWarning(source, 1, fmt, source)) {
             /* Spurious errors can appear at shutdown */
             if (PyErr_ExceptionMatches(PyExc_Warning))
                 PyErr_WriteUnraisable((PyObject *) self);
@@ -100,6 +102,12 @@ fileio_dealloc_warn(fileio *self, PyObject *source)
         PyErr_Restore(exc, val, tb);
     }
     Py_RETURN_NONE;
+}
+
+static PyObject *
+fileio_dealloc_warn(fileio *self, PyObject *source)
+{
+    return fileio_dealloc_warn2(self, source, 0);
 }
 
 /* Returns 0 on success, -1 with exception set on failure. */
@@ -153,7 +161,7 @@ _io_FileIO_close_impl(fileio *self)
     if (res == NULL)
         PyErr_Fetch(&exc, &val, &tb);
     if (self->finalizing) {
-        PyObject *r = fileio_dealloc_warn(self, (PyObject *) self);
+        PyObject *r = fileio_dealloc_warn2(self, (PyObject *) self, 1);
         if (r)
             Py_DECREF(r);
         else
