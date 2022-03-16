@@ -1290,8 +1290,6 @@ eval_frame_handle_pending(PyThreadState *tstate)
     { \
         NEXTOPARG(); \
         PRE_DISPATCH_GOTO(); \
-        assert(cframe.use_tracing == 0 || cframe.use_tracing == 255); \
-        opcode |= cframe.use_tracing OR_DTRACE_LINE; \
         DISPATCH_GOTO(); \
     }
 
