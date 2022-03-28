@@ -5491,7 +5491,7 @@ handle_eval_breaker:
         TARGET(DO_TRACE) {
             int instr_prev = skip_backwards_over_extended_args(frame->f_code, frame->f_lasti);
             frame->f_lasti = INSTR_OFFSET();
-            TRACING_NEXTOPARG();
+            opcode = frame->f_code->co_original_opcodes[frame->f_lasti];
             if (opcode == RESUME) {
                 if (oparg < 2) {
                     CHECK_EVAL_BREAKER();

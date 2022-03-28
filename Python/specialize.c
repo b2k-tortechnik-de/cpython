@@ -2231,6 +2231,24 @@ _PySpecialization_ClassifyCallable(PyObject *callable)
 
 #endif
 
+static int
+init_orignal_opcode(PyCodeObject *code, int size)
+{
+    if (code->co_original_opcodes == NULL) {
+        _Py_CODEUNIT *original = (_Py_CODEUNIT *)PyBytes_AS_STRING(code->co_code);
+        uint8_t *original_opcodes = PyMem_Malloc(PyBytes_GET_SIZE(code->co_code));
+        if (original_opcodes == NULL) {
+            PyErr_NoMemory();
+            return -1;
+        }
+        for (int i = 0; i < size; i++) {
+            original_opcodes[i] = _Py_OPCODE(original[i]);
+        }
+        code->co_original_opcodes = original_opcodes;
+    }
+    return 0;
+}
+
 int
 _PyInstrumentCode(PyCodeObject *code)
 {
@@ -2248,8 +2266,11 @@ _PyInstrumentCode(PyCodeObject *code)
     // PROFILE/TRACE_CALL
 
     /* This is the dumbest thing that can work */
-    int size = (int)PyBytes_GET_SIZE(code->co_code);
+    int size = (int)PyBytes_GET_SIZE(code->co_code)/sizeof(_Py_CODEUNIT);
     _Py_CODEUNIT *original = (_Py_CODEUNIT *)PyBytes_AS_STRING(code->co_code);
+    if (init_orignal_opcode(code, size)) {
+        return -1;
+    }
     int i = 0;
     for (; i < size; i++) {
         int op = _Py_OPCODE(code->co_firstinstr[i]);
