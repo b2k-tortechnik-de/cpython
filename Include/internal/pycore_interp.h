@@ -45,6 +45,8 @@ struct _pending_calls {
 
 struct _ceval_state {
     int recursion_limit;
+    int instrumentation_vector;
+    int tracing_threads;
     /* This single variable consolidates all requests to break out of
        the fast path in the eval loop. */
     _Py_atomic_int eval_breaker;

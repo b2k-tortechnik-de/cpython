@@ -114,7 +114,6 @@ extern "C" {
 #define PRECALL                                166
 #define CALL                                   171
 #define KW_NAMES                               172
-#define DO_TRACE                               220
 #define BINARY_OP_ADAPTIVE                       3
 #define BINARY_OP_ADD_FLOAT                      4
 #define BINARY_OP_ADD_INT                        5
@@ -185,6 +184,8 @@ extern "C" {
 #define UNPACK_SEQUENCE_LIST                   173
 #define UNPACK_SEQUENCE_TUPLE                  174
 #define UNPACK_SEQUENCE_TWO_TUPLE              175
+#define INSTRUMENT                             253
+#define DO_TRACE                               254
 #define DO_TRACING                             255
 
 extern const uint8_t _PyOpcode_Caches[256];
@@ -276,7 +277,6 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [DELETE_SUBSCR] = DELETE_SUBSCR,
     [DICT_MERGE] = DICT_MERGE,
     [DICT_UPDATE] = DICT_UPDATE,
-    [DO_TRACE] = DO_TRACE,
     [END_ASYNC_FOR] = END_ASYNC_FOR,
     [EXTENDED_ARG] = EXTENDED_ARG,
     [FORMAT_VALUE] = FORMAT_VALUE,

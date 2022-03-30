@@ -32,6 +32,8 @@ def write_contents(f):
     """
     opcode = find_module('opcode')
     targets = ['_unknown_opcode'] * 256
+    targets[253] = "TARGET_INSTRUMENT"
+    targets[254] = "TARGET_DO_TRACE"
     targets[255] = "TARGET_DO_TRACING"
     for opname, op in opcode.opmap.items():
         targets[op] = "TARGET_%s" % opname

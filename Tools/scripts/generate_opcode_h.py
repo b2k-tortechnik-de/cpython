@@ -74,6 +74,8 @@ def main(opcode_py, outfile='Include/opcode.h'):
                 next_op += 1
             fobj.write(DEFINE.format(name, next_op))
             used[next_op] = True
+        fobj.write(DEFINE.format('INSTRUMENT', 253))
+        fobj.write(DEFINE.format('DO_TRACE', 254))
         fobj.write(DEFINE.format('DO_TRACING', 255))
         fobj.write("\nextern const uint8_t _PyOpcode_Caches[256];\n")
         fobj.write("\nextern const uint8_t _PyOpcode_Deopt[256];\n")

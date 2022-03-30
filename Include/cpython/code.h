@@ -56,7 +56,7 @@ typedef uint16_t _Py_CODEUNIT;
     PyObject *co_names;            /* list of strings (names used) */          \
     PyObject *co_exceptiontable;   /* Byte string encoding exception handling  \
                                       table */                                 \
-    int co_instrumentation;        /* How the code object is instrumented */   \
+    int co_instrumentation;   /* How the code object is instrumented */   \
     int co_flags;                  /* CO_..., see below */                     \
     int co_warmup;                 /* Warmup counter for quickening */         \
                                                                                \

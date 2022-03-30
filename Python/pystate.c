@@ -2220,6 +2220,25 @@ _PyThreadState_PopFrame(PyThreadState *tstate, _PyInterpreterFrame * frame)
     }
 }
 
+void
+_PyInterpreterState_ChangeTracingCount(PyInterpreterState *is, int delta)
+{
+    assert(delta == -1 || delta == 1);
+    if (is->ceval.tracing_threads == 0) {
+        assert(delta > 0);
+        is->ceval.instrumentation_vector = 1;
+        is->ceval.tracing_threads = delta;
+        _PyInstrumentAllStacks(is);
+    }
+    else {
+        is->ceval.tracing_threads += delta;
+        if (is->ceval.tracing_threads == 0) {
+            is->ceval.instrumentation_vector = 0;
+            _PyInstrumentAllStacks(is);
+        }
+    }
+}
+
 
 #ifdef __cplusplus
 }

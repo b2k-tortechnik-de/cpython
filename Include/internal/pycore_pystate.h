@@ -139,16 +139,20 @@ PyAPI_FUNC(void) _PyThreadState_DeleteExcept(
     _PyRuntimeState *runtime,
     PyThreadState *tstate);
 
+extern void
+_PyInterpreterState_ChangeTracingCount(PyInterpreterState *is, int delta);
 
 static inline void
 _PyThreadState_UpdateTracingState(PyThreadState *tstate)
 {
     int use_tracing = (tstate->c_tracefunc != NULL
                        || tstate->c_profilefunc != NULL);
-    tstate->cframe->use_tracing = (use_tracing ? 255 : 0);
-    _PyInstrumentStack(tstate);
+    if (use_tracing != tstate->use_tracing) {
+        int delta = use_tracing - tstate->use_tracing;
+        tstate->use_tracing = use_tracing;
+        _PyInterpreterState_ChangeTracingCount(tstate->interp, delta);
+    }
 }
-
 
 /* Other */
 

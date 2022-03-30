@@ -262,8 +262,12 @@ _PyCode_Quicken(PyCodeObject *code)
         int opcode = _Py_OPCODE(instructions[i]);
         uint8_t adaptive_opcode = adaptive_opcodes[opcode];
         if (adaptive_opcode) {
+            assert(_PyOpcode_Caches[opcode]);
             _Py_SET_OPCODE(instructions[i], adaptive_opcode);
             // Make sure the adaptive counter is zero:
+            if (instructions[i + 1] != 0) {
+                printf("%d %d\n", i, instructions[i + 1]);
+            }
             assert(instructions[i + 1] == 0);
             previous_opcode = -1;
             i += _PyOpcode_Caches[opcode];
@@ -2048,102 +2052,132 @@ int
 #endif
 
 static int
-init_orignal_opcode(PyCodeObject *code, int size)
+init_orignal_opcode(PyCodeObject *code)
 {
     if (code->co_original_opcodes == NULL) {
-        _Py_CODEUNIT *original = _PyCode_CODE(code);
+        int size = (int)_PyCode_NBYTES(code)/sizeof(_Py_CODEUNIT);
+        _Py_CODEUNIT *instructions = _PyCode_CODE(code);
         uint8_t *original_opcodes = PyMem_Malloc(size);
         if (original_opcodes == NULL) {
             PyErr_NoMemory();
             return -1;
         }
         for (int i = 0; i < size; i++) {
-            original_opcodes[i] = _PyOpcode_Deopt[_Py_OPCODE(original[i])];
+            int op = _PyOpcode_Deopt[_Py_OPCODE(instructions[i])];
+            original_opcodes[i] = op;
+            int caches = _PyOpcode_Caches[op];
+            for (int j = 1; j <= caches; j++) {
+                original_opcodes[i+j] = CACHE;
+            }
+            i += caches;
         }
         code->co_original_opcodes = original_opcodes;
     }
     return 0;
 }
 
-
-int
-_PyInstrumentCode(PyCodeObject *code)
+/* Make sure that co_original_opcodes exists,
+ * that the code is quickened, and that all
+ * DO_TRACE and INSTRUMENTS are replaced with the
+ * original or adaptive form */
+static int
+code_reset(PyCodeObject *code)
 {
-    // First we need to quicken the code.
-    // Once we quicken inline we will need to
-    // create the original_opcode array.
+    if (init_orignal_opcode(code)) {
+        return -1;
+    }
     if (code->co_warmup) {
         code->co_warmup = 0;
         _PyCode_Quicken(code);
+        return 0;
     }
-    // Now iterate over the code inserting the correct instructions.
-    // We need an acurate way to determine line tracing.
-    // TRACE_LINE
-    // TRACE_BACKEDGE
-    // TRACE_OPCODE
-    // PROFILE/TRACE_CALL
+    _Py_CODEUNIT *instructions = _PyCode_CODE(code);
+    for (int i = 0; i < Py_SIZE(code); i++) {
+        if (IS_ARTIFICIAL(_Py_OPCODE(instructions[i]))) {
+            int op = code->co_original_opcodes[i];
+            int adaptive = adaptive_opcodes[op];
+            if (adaptive) {
+                _Py_SET_OPCODE(instructions[i], adaptive);
+                int caches = _PyOpcode_Caches[op];
+                assert(caches);
+                instructions[i+1] = 0;
+                i += caches;
+            }
+            else {
+                _Py_SET_OPCODE(instructions[i], op);
+            }
+        }
+    }
+    return 0;
+}
 
-    /* This is the dumbest thing that can work */
-    int size = (int)_PyCode_NBYTES(code)/sizeof(_Py_CODEUNIT);
-    _Py_CODEUNIT *original = _PyCode_CODE(code);
-    if (init_orignal_opcode(code, size)) {
+int
+_PyInstrumentCode(PyCodeObject *code, int instrumentation)
+{
+    int size = (int)Py_SIZE(code);
+    if (code_reset(code)) {
         return -1;
     }
+    if (instrumentation == 0) {
+        return 0;
+    }
+    /* TO DO -- Don't instrument every instruction, just the lines
+     * and backedges, unless `f_trace_opcode` has been set.
+     */
+    _Py_CODEUNIT *instructions = _PyCode_CODE(code);
     int i = 0;
     for (; i < size; i++) {
-        int op = _Py_OPCODE(original[i]);
-        if (op == RESUME || op == RESUME_QUICK) {
+        int op = code->co_original_opcodes[i];
+        if (op == RESUME) {
             break;
         }
     }
     for (; i < size; i++) {
-        if (_Py_OPCODE(original[i]) == CACHE) {
-            /* Leave cache entries */
-        }
-        else if (_Py_OPCODE(original[i]) == EXTENDED_ARG) {
+        int op = code->co_original_opcodes[i];
+        assert(op != CACHE);
+        if (op == EXTENDED_ARG) {
             /* Leave EXTENDED_ARGS alone */
         }
         else {
-            original[i] = _Py_MAKECODEUNIT(DO_TRACE, _Py_OPARG(original[i]));
+            _Py_SET_OPCODE(instructions[i], DO_TRACE);
+            int caches = _PyOpcode_Caches[op];
+            if (caches) {
+                instructions[i+1] = 7;
+                i += _PyOpcode_Caches[op];
+            }
         }
     }
-    code->co_instrumentation = 255;
+    code->co_instrumentation = instrumentation;
     return 0;
 }
 
-void
-_PyUninstrumentCode(PyCodeObject *code)
-{
-    assert(code->co_warmup == 0);
-    int size = (int)_PyCode_NBYTES(code)/sizeof(_Py_CODEUNIT);
-    _Py_CODEUNIT *instructions = _PyCode_CODE(code);
-    for (int i = 0; i < size; i++) {
-        int original = code->co_original_opcodes[i];
-        _Py_SET_OPCODE(instructions[i], original);
-        if (_PyOpcode_Caches[original]) {
-            instructions[i + 1] = 0;
-            i += _PyOpcode_Caches[original];
-        }
-    }
-    _PyCode_Quicken(code);
-}
 
 int
  _PyInstrumentStack(PyThreadState *tstate)
 {
     _PyInterpreterFrame *frame = tstate->cframe->current_frame;
     while (frame) {
-        if (_PyInstrumentCode(frame->f_code)) {
+        if (init_orignal_opcode(frame->f_code)) {
             return -1;
         }
+        int nexti = frame->f_lasti;
+        /* Skip over caches.
+         * Also skip over CALLs, to handle PRECALL specializations that jump over calls
+         */
+        do {
+            nexti++;
+            while (frame->f_code->co_original_opcodes[nexti] == CACHE) {
+                nexti++;
+            }
+            _Py_SET_OPCODE(_PyCode_CODE(frame->f_code)[nexti], INSTRUMENT);
+        } while (frame->f_code->co_original_opcodes[nexti] == CALL);
         frame = frame->previous;
     }
     return 0;
 }
 
-int _PyInstrumentAllStacks(void)
+int _PyInstrumentAllStacks(PyInterpreterState *interp)
 {
-    PyInterpreterState *interp = _PyInterpreterState_GET();
     for (PyThreadState *p = interp->threads.head; p != NULL; p = p->next) {
         if (_PyInstrumentStack(p)) {
             return -1;

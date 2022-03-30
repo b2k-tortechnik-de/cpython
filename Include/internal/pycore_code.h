@@ -422,9 +422,8 @@ enum InstrumentationStates {
     TRACE_OPCODE_INSTRUMENTED = (1<<4)
 };
 
-extern int _PyInstrumentStack(PyThreadState *tstate);
-extern int _PyInstrumentCode(PyCodeObject *code);
-extern void _PyUninstrumentCode(PyCodeObject *code);
+extern int _PyInstrumentAllStacks(PyInterpreterState *is);
+extern int _PyInstrumentCode(PyCodeObject *code, int instrumentation);
 
 #endif
 
