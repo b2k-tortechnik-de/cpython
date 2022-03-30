@@ -18,7 +18,7 @@
 
 /* Map from opcode to adaptive opcode.
   Values of zero are ignored. */
-static uint8_t adaptive_opcodes[256] = {
+uint8_t _PyOpcode_Adaptive[256] = {
     [LOAD_ATTR] = LOAD_ATTR_ADAPTIVE,
     [LOAD_GLOBAL] = LOAD_GLOBAL_ADAPTIVE,
     [LOAD_METHOD] = LOAD_METHOD_ADAPTIVE,
@@ -144,7 +144,7 @@ print_spec_stats(FILE *out, OpcodeStats *stats)
      * even though we don't specialize them yet. */
     fprintf(out, "opcode[%d].specializable : 1\n", FOR_ITER);
     for (int i = 0; i < 256; i++) {
-        if (adaptive_opcodes[i]) {
+        if (_PyOpcode_Adaptive[i]) {
             fprintf(out, "opcode[%d].specializable : 1\n", i);
         }
         PRINT_STAT(i, specialization.success);
@@ -260,7 +260,7 @@ _PyCode_Quicken(PyCodeObject *code)
     _Py_CODEUNIT *instructions = _PyCode_CODE(code);
     for (int i = 0; i < Py_SIZE(code); i++) {
         int opcode = _Py_OPCODE(instructions[i]);
-        uint8_t adaptive_opcode = adaptive_opcodes[opcode];
+        uint8_t adaptive_opcode = _PyOpcode_Adaptive[opcode];
         if (adaptive_opcode) {
             assert(_PyOpcode_Caches[opcode]);
             _Py_SET_OPCODE(instructions[i], adaptive_opcode);
