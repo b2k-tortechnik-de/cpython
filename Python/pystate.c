@@ -2224,7 +2224,6 @@ _PyThreadState_PopFrame(PyThreadState *tstate, _PyInterpreterFrame * frame)
     }
 }
 
-extern FILE *instr_out;
 
 void
 _PyInterpreterState_ChangeTracingCount(PyInterpreterState *is, int delta)
@@ -2233,7 +2232,6 @@ _PyInterpreterState_ChangeTracingCount(PyInterpreterState *is, int delta)
     is->ceval.tracing_threads += delta;
     int any_tracing = is->ceval.tracing_threads != 0;
     if (is->ceval.instrumentation_vector != any_tracing) {
-        fprintf(instr_out, "Setting instrumentation: %d\n", any_tracing);
         is->ceval.instrumentation_vector = any_tracing;
         _PyInstrumentAllStacks(is, any_tracing);
     }

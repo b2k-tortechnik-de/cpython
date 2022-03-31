@@ -724,12 +724,9 @@ Py_MakePendingCalls(void)
 
 /* The interpreter's recursion limit */
 
-FILE *instr_out;
-
 void
 _PyEval_InitRuntimeState(struct _ceval_runtime_state *ceval)
 {
-    instr_out = fopen("/tmp/instructions.txt", "w");
 #ifndef EXPERIMENTAL_ISOLATED_SUBINTERPRETERS
     _gil_initialize(&ceval->gil);
 #endif
@@ -1263,8 +1260,7 @@ eval_frame_handle_pending(PyThreadState *tstate)
         lastopcode = op; \
     } while (0)
 #else
-#define INSTRUCTION_START(op) frame->f_lasti = INSTR_OFFSET(); next_instr++; \
-    fprintf(instr_out, #op " %d %d\n", frame->f_code->co_instrumentation, *instrumentation)
+#define INSTRUCTION_START(op) frame->f_lasti = INSTR_OFFSET(); next_instr++
 #endif
 
 #if USE_COMPUTED_GOTOS
@@ -1677,23 +1673,6 @@ start_frame:
 
 resume_frame:
     SET_LOCALS_FROM_FRAME();
-    if (*instrumentation != frame->f_code->co_instrumentation) {
-        switch(_Py_OPCODE(*next_instr)) {
-            case RESUME:
-            case RESUME_QUICK:
-            case POP_TOP:
-            case RETURN_GENERATOR:
-            case MAKE_CELL:
-            case COPY_FREE_VARS:
-            case DO_TRACE:
-                /* OK */
-                break;
-            default:
-                fflush(instr_out);
-                printf("Instruction %d\n", _Py_OPCODE(*next_instr));
-                assert(0);
-        }
-    }
 
 #ifdef LLTRACE
     {
@@ -3581,7 +3560,6 @@ update_instrumentation:
         }
 
         TARGET(STORE_ATTR_INSTANCE_VALUE) {
-            fflush(instr_out);
             assert(*instrumentation == 0);
             PyObject *owner = TOP();
             PyTypeObject *tp = Py_TYPE(owner);
@@ -4385,7 +4363,6 @@ update_instrumentation:
         }
 
         TARGET(LOAD_METHOD) {
-            fflush(instr_out);
             PREDICTED(LOAD_METHOD);
             /* Designed to work in tandem with CALL_METHOD. */
             PyObject *name = GETITEM(names, oparg);
@@ -5490,8 +5467,6 @@ update_instrumentation:
         case DO_TRACE:
 #endif
         {
-            fprintf(instr_out, "%d %d %d\n", DO_TRACE, frame->f_code->co_instrumentation, *instrumentation);
-            fflush(instr_out);
             assert(frame->f_code->co_saved_opcodes != NULL);
             if (tstate->use_tracing && tstate->tracing == 0) {
                 int instr_prev = frame->f_lasti;
@@ -5532,17 +5507,16 @@ update_instrumentation:
                             goto error;
                         }
                         /* Reload possibly changed frame fields */
-                        JUMPTO(frame->f_lasti);
-
+                        if (frame->f_lasti != INSTR_OFFSET()) {
+                            JUMPTO(frame->f_lasti);
+                            NEXTOPARG();
+                        }
                         stack_pointer = _PyFrame_GetStackPointer(frame);
                         frame->stacktop = -1;
                     }
                 }
             }
-            opcode = _Py_OPCODE(_PyCode_CODE(frame->f_code)[INSTR_OFFSET()]);
-            if (IS_ARTIFICIAL(opcode)) {
-                opcode = frame->f_code->co_saved_opcodes[INSTR_OFFSET()];
-            }
+            opcode = frame->f_code->co_saved_opcodes[INSTR_OFFSET()];
             PRE_DISPATCH_GOTO();
             DISPATCH_GOTO();
         }
@@ -5606,7 +5580,6 @@ unbound_local_error:
         }
 
 error:
-        fprintf(instr_out, "Error\n");
         call_shape.kwnames = NULL;
         /* Double-check exception status. */
 #ifdef NDEBUG
@@ -6795,8 +6768,7 @@ maybe_call_line_trace(Py_tracefunc func, PyObject *obj,
     */
     initialize_trace_info(&tstate->trace_info, frame);
     int entry_point = 0;
-    _Py_CODEUNIT *code = _PyCode_CODE(frame->f_code);
-    while (_PyOpcode_Deopt[_Py_OPCODE(code[entry_point])] != RESUME) {
+    while (frame->f_code->co_saved_opcodes[entry_point] != RESUME) {
         entry_point++;
     }
     int lastline;
@@ -6815,9 +6787,7 @@ maybe_call_line_trace(Py_tracefunc func, PyObject *obj,
         /* Trace backward edges (except in 'yield from') or if line number has changed */
         int trace = line != lastline ||
             (frame->f_lasti < instr_prev &&
-            // SEND has no quickened forms, so no need to use _PyOpcode_Deopt
-            // here:
-            _Py_OPCODE(_PyCode_CODE(frame->f_code)[frame->f_lasti]) != SEND);
+            frame->f_code->co_saved_opcodes[frame->f_lasti] != SEND);
         if (trace) {
             result = call_trace(func, obj, tstate, frame, PyTrace_LINE, Py_None);
         }

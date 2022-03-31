@@ -2056,12 +2056,12 @@ _PyCode_InitSavedOpcodes(PyCodeObject *code)
 {
     if (code->co_saved_opcodes == NULL) {
         int size = Py_SIZE(code);
-        _Py_CODEUNIT *instructions = _PyCode_CODE(code);
         uint8_t *saved = PyMem_Malloc(size);
         if (saved == NULL) {
             PyErr_NoMemory();
             return -1;
         }
+        _Py_CODEUNIT *instructions = _PyCode_CODE(code);
         for (int i = 0; i < size; i++) {
             int op = _PyOpcode_Deopt[_Py_OPCODE(instructions[i])];
             saved[i] = op;
