@@ -424,7 +424,7 @@ enum InstrumentationStates {
     TRACE_OPCODE_INSTRUMENTED = (1<<4)
 };
 
-extern int _PyInstrumentAllStacks(PyInterpreterState *is);
+extern int _PyInstrumentAllStacks(PyInterpreterState *is, int instrumentation);
 extern int _PyInstrumentCode(PyCodeObject *code, int instrumentation);
 
 #endif

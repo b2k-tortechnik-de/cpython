@@ -184,9 +184,7 @@ extern "C" {
 #define UNPACK_SEQUENCE_LIST                   173
 #define UNPACK_SEQUENCE_TUPLE                  174
 #define UNPACK_SEQUENCE_TWO_TUPLE              175
-#define INSTRUMENT                             253
 #define DO_TRACE                               254
-#define DO_TRACING                             255
 
 extern const uint8_t _PyOpcode_Caches[256];
 

@@ -56,7 +56,7 @@ typedef uint16_t _Py_CODEUNIT;
     PyObject *co_names;            /* list of strings (names used) */          \
     PyObject *co_exceptiontable;   /* Byte string encoding exception handling  \
                                       table */                                 \
-    int co_instrumentation;   /* How the code object is instrumented */   \
+    int co_instrumentation;        /* How the code object is instrumented */   \
     int co_flags;                  /* CO_..., see below */                     \
     int co_warmup;                 /* Warmup counter for quickening */         \
                                                                                \
@@ -95,7 +95,7 @@ typedef uint16_t _Py_CODEUNIT;
     /* Scratch space for extra data relating to the code object.               \
        Type is a void* to keep the format private in codeobject.c to force     \
        people to go through the proper APIs. */                                \
-    uint8_t *co_original_opcodes; /* Original opcodes, when instrumented */    \
+    uint8_t *co_saved_opcodes;       /* Saved opcodes, when instrumented */    \
     void *co_extra;                                                            \
     char co_code_adaptive[(SIZE)];                                             \
 }

@@ -729,7 +729,7 @@ FILE *instr_out;
 void
 _PyEval_InitRuntimeState(struct _ceval_runtime_state *ceval)
 {
-    instr_out = fopen("/tmp/instuctions.txt", "w");
+    instr_out = fopen("/tmp/instructions.txt", "w");
 #ifndef EXPERIMENTAL_ISOLATED_SUBINTERPRETERS
     _gil_initialize(&ceval->gil);
 #endif
@@ -1263,7 +1263,8 @@ eval_frame_handle_pending(PyThreadState *tstate)
         lastopcode = op; \
     } while (0)
 #else
-#define INSTRUCTION_START(op) frame->f_lasti = INSTR_OFFSET(); next_instr++; fputs(#op "\n", instr_out);
+#define INSTRUCTION_START(op) frame->f_lasti = INSTR_OFFSET(); next_instr++; \
+    fprintf(instr_out, #op " %d %d\n", frame->f_code->co_instrumentation, *instrumentation)
 #endif
 
 #if USE_COMPUTED_GOTOS
@@ -1483,14 +1484,14 @@ eval_frame_handle_pending(PyThreadState *tstate)
     }
 
 #define TRACE_FUNCTION_ENTRY() \
-    if (*instrumentation) { \
+    do { \
         _PyFrame_SetStackPointer(frame, stack_pointer); \
         int err = trace_function_entry(tstate, frame); \
         stack_pointer = _PyFrame_GetStackPointer(frame); \
         if (err) { \
             goto error; \
         } \
-    }
+    } while (0)
 
 #define TRACE_FUNCTION_THROW_ENTRY() \
     if (*instrumentation) { \
@@ -1605,6 +1606,7 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
     int oparg;         /* Current opcode argument, if any */
     _Py_atomic_int * const eval_breaker = &tstate->interp->ceval.eval_breaker;
     int *const instrumentation = &tstate->interp->ceval.instrumentation_vector;
+    assert(*instrumentation == 0 || *instrumentation == 1);
 
     _PyCFrame cframe;
     CallShape call_shape;
@@ -1628,6 +1630,9 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
         if (_Py_EnterRecursiveCall(tstate, "")) {
             tstate->recursion_remaining--;
             goto exit_unwind;
+        }
+        if (frame->f_code->co_instrumentation != *instrumentation) {
+            _PyInstrumentCode(frame->f_code, *instrumentation);
         }
         TRACE_FUNCTION_THROW_ENTRY();
         DTRACE_FUNCTION_ENTRY();
@@ -1672,6 +1677,23 @@ start_frame:
 
 resume_frame:
     SET_LOCALS_FROM_FRAME();
+    if (*instrumentation != frame->f_code->co_instrumentation) {
+        switch(_Py_OPCODE(*next_instr)) {
+            case RESUME:
+            case RESUME_QUICK:
+            case POP_TOP:
+            case RETURN_GENERATOR:
+            case MAKE_CELL:
+            case COPY_FREE_VARS:
+            case DO_TRACE:
+                /* OK */
+                break;
+            default:
+                fflush(instr_out);
+                printf("Instruction %d\n", _Py_OPCODE(*next_instr));
+                assert(0);
+        }
+    }
 
 #ifdef LLTRACE
     {
@@ -1705,7 +1727,6 @@ handle_eval_breaker:
     DISPATCH();
 
 update_instrumentation:
-    fputs("Updating instrumentation\n", instr_out);
     next_instr--;
     assert(*instrumentation != frame->f_code->co_instrumentation);
     if (_PyInstrumentCode(frame->f_code, *instrumentation)) {
@@ -3003,6 +3024,7 @@ update_instrumentation:
         }
 
         TARGET(LOAD_GLOBAL_ADAPTIVE) {
+            assert(frame->f_code->co_instrumentation == 0);
             assert(*instrumentation == 0);
             _PyLoadGlobalCache *cache = (_PyLoadGlobalCache *)next_instr;
             if (cache->counter == 0) {
@@ -3559,6 +3581,7 @@ update_instrumentation:
         }
 
         TARGET(STORE_ATTR_INSTANCE_VALUE) {
+            fflush(instr_out);
             assert(*instrumentation == 0);
             PyObject *owner = TOP();
             PyTypeObject *tp = Py_TYPE(owner);
@@ -4362,6 +4385,7 @@ update_instrumentation:
         }
 
         TARGET(LOAD_METHOD) {
+            fflush(instr_out);
             PREDICTED(LOAD_METHOD);
             /* Designed to work in tandem with CALL_METHOD. */
             PyObject *name = GETITEM(names, oparg);
@@ -5457,7 +5481,6 @@ update_instrumentation:
         }
 
         TARGET(CACHE) {
-            fflush(instr_out);
             Py_UNREACHABLE();
         }
 
@@ -5467,12 +5490,18 @@ update_instrumentation:
         case DO_TRACE:
 #endif
         {
-            assert(frame->f_code->co_original_opcodes != NULL);
-            if (tstate->tracing == 0) {
+            fprintf(instr_out, "%d %d %d\n", DO_TRACE, frame->f_code->co_instrumentation, *instrumentation);
+            fflush(instr_out);
+            assert(frame->f_code->co_saved_opcodes != NULL);
+            if (tstate->use_tracing && tstate->tracing == 0) {
                 int instr_prev = frame->f_lasti;
                 frame->f_lasti = INSTR_OFFSET();
-                opcode = frame->f_code->co_original_opcodes[INSTR_OFFSET()];
+                opcode = frame->f_code->co_saved_opcodes[INSTR_OFFSET()];
+                assert(!IS_ARTIFICIAL(opcode));
                 if (opcode == RESUME) {
+                    if (*instrumentation == 0) {
+                        goto update_instrumentation;
+                    }
                     if (oparg < 2) {
                         CHECK_EVAL_BREAKER();
                     }
@@ -5481,12 +5510,14 @@ update_instrumentation:
                     DTRACE_FUNCTION_ENTRY();
                 }
                 else {
+                    assert(*instrumentation);
+                    assert(frame->f_code->co_instrumentation);
                     /* line-by-line tracing support */
                     if (PyDTrace_LINE_ENABLED()) {
                         maybe_dtrace_line(frame, &tstate->trace_info, instr_prev);
                     }
 
-                    if (tstate->c_tracefunc != NULL && !tstate->tracing) {
+                    if (tstate->c_tracefunc != NULL) {
                         int err;
                         /* see maybe_call_line_trace()
                         for expository comments */
@@ -5508,82 +5539,13 @@ update_instrumentation:
                     }
                 }
             }
-            opcode = frame->f_code->co_original_opcodes[INSTR_OFFSET()];
+            opcode = _Py_OPCODE(_PyCode_CODE(frame->f_code)[INSTR_OFFSET()]);
+            if (IS_ARTIFICIAL(opcode)) {
+                opcode = frame->f_code->co_saved_opcodes[INSTR_OFFSET()];
+            }
             PRE_DISPATCH_GOTO();
             DISPATCH_GOTO();
         }
-
-        TARGET(INSTRUMENT) {
-            if (*instrumentation != frame->f_code->co_instrumentation) {
-                goto update_instrumentation;
-            }
-            next_instr--;
-            opcode = frame->f_code->co_original_opcodes[INSTR_OFFSET()];
-            int adaptive = _PyOpcode_Adaptive[opcode];
-            if (adaptive) {
-                opcode = adaptive;
-                next_instr[1] = 7;
-            }
-            ((uint8_t*)next_instr)[0]  = opcode;
-            DISPATCH();
-        }
-
-#if USE_COMPUTED_GOTOS
-        TARGET_DO_TRACING:
-#else
-        case DO_TRACING:
-#endif
-    {
-        if (tstate->tracing == 0) {
-            int instr_prev = frame->f_lasti;
-            frame->f_lasti = INSTR_OFFSET();
-            TRACING_NEXTOPARG();
-            switch(opcode) {
-                case COPY_FREE_VARS:
-                case MAKE_CELL:
-                case RETURN_GENERATOR:
-                    /* Frame not fully initialized */
-                    break;
-                case RESUME:
-                    if (oparg < 2) {
-                        CHECK_EVAL_BREAKER();
-                    }
-                    /* Call tracing */
-                    TRACE_FUNCTION_ENTRY();
-                    DTRACE_FUNCTION_ENTRY();
-                    break;
-                default:
-                    /* line-by-line tracing support */
-                    if (PyDTrace_LINE_ENABLED()) {
-                        maybe_dtrace_line(frame, &tstate->trace_info, instr_prev);
-                    }
-
-                    if (tstate->c_tracefunc != NULL && !tstate->tracing) {
-                        int err;
-                        /* see maybe_call_line_trace()
-                        for expository comments */
-                        _PyFrame_SetStackPointer(frame, stack_pointer);
-
-                        err = maybe_call_line_trace(tstate->c_tracefunc,
-                                                    tstate->c_traceobj,
-                                                    tstate, frame, instr_prev);
-                        if (err) {
-                            /* trace function raised an exception */
-                            next_instr++;
-                            goto error;
-                        }
-                        /* Reload possibly changed frame fields */
-                        JUMPTO(frame->f_lasti);
-
-                        stack_pointer = _PyFrame_GetStackPointer(frame);
-                        frame->stacktop = -1;
-                    }
-            }
-        }
-        TRACING_NEXTOPARG();
-        PRE_DISPATCH_GOTO();
-        DISPATCH_GOTO();
-    }
 
 #if USE_COMPUTED_GOTOS
         _unknown_opcode:
@@ -5644,6 +5606,7 @@ unbound_local_error:
         }
 
 error:
+        fprintf(instr_out, "Error\n");
         call_shape.kwnames = NULL;
         /* Double-check exception status. */
 #ifdef NDEBUG
@@ -5717,6 +5680,9 @@ exception_unwind:
             Py_XDECREF(exc);
             PUSH(val);
             JUMPTO(handler);
+            if (frame->f_code->co_instrumentation != *instrumentation) {
+                _PyInstrumentCode(frame->f_code, *instrumentation);
+            }
             /* Resume normal execution */
             DISPATCH();
         }

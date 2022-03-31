@@ -1032,6 +1032,10 @@ PyThreadState_Clear(PyThreadState *tstate)
     tstate->c_tracefunc = NULL;
     Py_CLEAR(tstate->c_profileobj);
     Py_CLEAR(tstate->c_traceobj);
+    if (tstate->use_tracing) {
+        _PyInterpreterState_ChangeTracingCount(tstate->interp, -1);
+        tstate->use_tracing = 0;
+    }
 
     Py_CLEAR(tstate->async_gen_firstiter);
     Py_CLEAR(tstate->async_gen_finalizer);
@@ -2220,22 +2224,18 @@ _PyThreadState_PopFrame(PyThreadState *tstate, _PyInterpreterFrame * frame)
     }
 }
 
+extern FILE *instr_out;
+
 void
 _PyInterpreterState_ChangeTracingCount(PyInterpreterState *is, int delta)
 {
     assert(delta == -1 || delta == 1);
-    if (is->ceval.tracing_threads == 0) {
-        assert(delta > 0);
-        is->ceval.instrumentation_vector = 1;
-        is->ceval.tracing_threads = delta;
-        _PyInstrumentAllStacks(is);
-    }
-    else {
-        is->ceval.tracing_threads += delta;
-        if (is->ceval.tracing_threads == 0) {
-            is->ceval.instrumentation_vector = 0;
-            _PyInstrumentAllStacks(is);
-        }
+    is->ceval.tracing_threads += delta;
+    int any_tracing = is->ceval.tracing_threads != 0;
+    if (is->ceval.instrumentation_vector != any_tracing) {
+        fprintf(instr_out, "Setting instrumentation: %d\n", any_tracing);
+        is->ceval.instrumentation_vector = any_tracing;
+        _PyInstrumentAllStacks(is, any_tracing);
     }
 }
 

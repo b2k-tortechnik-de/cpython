@@ -168,20 +168,21 @@ top_of_stack(int64_t stack)
     return stack & ((1<<BITS_PER_BLOCK)-1);
 }
 
+extern int
+_PyCode_InitSavedOpcodes(PyCodeObject *code);
+
 static int64_t *
 mark_stacks(PyCodeObject *code_obj, int len)
 {
-    PyObject *co_code = _PyCode_GetCode(code_obj);
-    if (co_code == NULL) {
-        return NULL;
-    }
-    _Py_CODEUNIT *code = (_Py_CODEUNIT *)PyBytes_AS_STRING(co_code);
+    _Py_CODEUNIT *code = _PyCode_CODE(code_obj);
     int64_t *stacks = PyMem_New(int64_t, len+1);
     int i, j, opcode;
 
     if (stacks == NULL) {
         PyErr_NoMemory();
-        Py_DECREF(co_code);
+        return NULL;
+    }
+    if (_PyCode_InitSavedOpcodes(code_obj)) {
         return NULL;
     }
     for (int i = 1; i <= len; i++) {
@@ -201,7 +202,7 @@ mark_stacks(PyCodeObject *code_obj, int len)
             if (next_stack == UNINITIALIZED) {
                 continue;
             }
-            opcode = _Py_OPCODE(code[i]);
+            opcode = code_obj->co_saved_opcodes[i];
             switch (opcode) {
                 case JUMP_IF_FALSE_OR_POP:
                 case JUMP_IF_TRUE_OR_POP:
@@ -309,7 +310,6 @@ mark_stacks(PyCodeObject *code_obj, int len)
             }
         }
     }
-    Py_DECREF(co_code);
     return stacks;
 }
 
@@ -485,7 +485,8 @@ frame_setlineno(PyFrameObject *f, PyObject* p_new_lineno, void *Py_UNUSED(ignore
      * In addition, jumps are forbidden when not tracing,
      * as this is a debugging feature.
      */
-    switch(PyThreadState_GET()->tracing_what) {
+    PyThreadState *tstate = PyThreadState_GET();
+    switch(tstate->tracing_what) {
         case PyTrace_EXCEPTION:
             PyErr_SetString(PyExc_ValueError,
                 "can only jump from a 'line' trace event");
