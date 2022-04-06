@@ -368,6 +368,7 @@ initial_counter_value(void) {
 #define SPEC_FAIL_LOAD_METHOD_HAS_MANAGED_DICT 21
 #define SPEC_FAIL_LOAD_METHOD_INSTANCE_ATTRIBUTE 22
 #define SPEC_FAIL_LOAD_METHOD_METACLASS_ATTRIBUTE 23
+#define SPEC_FAIL_LOAD_METHOD_DIFFERENT_KEYS 24
 
 /* Binary subscr and store subscr */
 
@@ -948,6 +949,10 @@ _Py_Specialize_LoadMethod(PyObject *owner, _Py_CODEUNIT *instr, PyObject *name)
             dictkind = MANAGED_VALUES;
         }
         else {
+            if (keys != ((PyDictObject *)dict)->ma_keys) {
+                SPECIALIZATION_FAIL(LOAD_METHOD, SPEC_FAIL_LOAD_METHOD_DIFFERENT_KEYS);
+                goto fail;
+            }
             dictkind = MANAGED_DICT;
         }
     }
@@ -968,6 +973,10 @@ _Py_Specialize_LoadMethod(PyObject *owner, _Py_CODEUNIT *instr, PyObject *name)
                 goto fail;
             }
             keys = ((PyDictObject *)dict)->ma_keys;
+            if (keys != ((PyDictObject *)dict)->ma_keys) {
+                SPECIALIZATION_FAIL(LOAD_METHOD, SPEC_FAIL_LOAD_METHOD_DIFFERENT_KEYS);
+                goto fail;
+            }
             dictkind = OFFSET_DICT;
         }
     }

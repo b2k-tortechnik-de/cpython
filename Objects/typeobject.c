@@ -3193,7 +3193,7 @@ type_new_impl(type_new_ctx *ctx)
     // Put the proper slots in place
     fixup_slot_dispatchers(type);
 
-    if (type->tp_flags & Py_TPFLAGS_MANAGED_DICT) {
+    if (type->tp_dictoffset > 0 || type->tp_flags & Py_TPFLAGS_MANAGED_DICT) {
         PyHeapTypeObject *et = (PyHeapTypeObject*)type;
         et->ht_cached_keys = _PyDict_NewKeysForClass();
     }
@@ -3579,7 +3579,7 @@ PyType_FromModuleAndSpec(PyObject *module, PyType_Spec *spec, PyObject *bases)
     if (PyType_Ready(type) < 0)
         goto fail;
 
-    if (type->tp_flags & Py_TPFLAGS_MANAGED_DICT) {
+    if (type->tp_dictoffset > 0 || type->tp_flags & Py_TPFLAGS_MANAGED_DICT) {
         res->ht_cached_keys = _PyDict_NewKeysForClass();
     }
 
