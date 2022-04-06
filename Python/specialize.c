@@ -1452,6 +1452,10 @@ specialize_method_descriptor(PyMethodDescrObject *descr, _Py_CODEUNIT *instr,
             _Py_SET_OPCODE(*instr, PRECALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS);
             return 0;
         }
+        case METH_METHOD|METH_FASTCALL|METH_KEYWORDS: {
+            _Py_SET_OPCODE(*instr, PRECALL_METHOD_DESCRIPTOR_METH_METHOD);
+            return 0;
+        }
     }
     SPECIALIZATION_FAIL(PRECALL, builtin_call_fail_kind(descr->d_method->ml_flags));
     return -1;
@@ -1512,9 +1516,7 @@ specialize_c_call(PyObject *callable, _Py_CODEUNIT *instr, int nargs,
     if (PyCFunction_GET_FUNCTION(callable) == NULL) {
         return 1;
     }
-    switch (PyCFunction_GET_FLAGS(callable) &
-        (METH_VARARGS | METH_FASTCALL | METH_NOARGS | METH_O |
-        METH_KEYWORDS | METH_METHOD)) {
+    switch (PyCFunction_GET_FLAGS(callable) & METH_CALL_MASK) {
         case METH_O: {
             if (kwnames) {
                 SPECIALIZATION_FAIL(PRECALL, SPEC_FAIL_CALL_KWNAMES);
