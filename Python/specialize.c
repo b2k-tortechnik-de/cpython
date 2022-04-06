@@ -435,6 +435,7 @@ initial_counter_value(void) {
 #define SPEC_FAIL_CALL_METHOD_WRAPPER 26
 #define SPEC_FAIL_CALL_OPERATOR_WRAPPER 27
 #define SPEC_FAIL_CALL_PYFUNCTION 28
+#define SPEC_FAIL_CALL_PYCFUNCTION_METH_METHOD 29
 
 /* COMPARE_OP */
 #define SPEC_FAIL_COMPARE_OP_DIFFERENT_TYPES 12
@@ -1387,8 +1388,7 @@ specialize_class_call(PyObject *callable, _Py_CODEUNIT *instr, int nargs,
 static int
 builtin_call_fail_kind(int ml_flags)
 {
-    switch (ml_flags & (METH_VARARGS | METH_FASTCALL | METH_NOARGS | METH_O |
-        METH_KEYWORDS | METH_METHOD)) {
+    switch (ml_flags & METH_CALL_MASK) {
         case METH_VARARGS:
             return SPEC_FAIL_CALL_PYCFUNCTION;
         case METH_VARARGS | METH_KEYWORDS:
@@ -1401,6 +1401,7 @@ builtin_call_fail_kind(int ml_flags)
             PyMethodObject. See zlib.compressobj()'s methods for an example.
         */
         case METH_METHOD | METH_FASTCALL | METH_KEYWORDS:
+            return SPEC_FAIL_CALL_PYCFUNCTION_METH_METHOD;
         default:
             return SPEC_FAIL_CALL_BAD_CALL_FLAGS;
     }
@@ -1417,9 +1418,7 @@ specialize_method_descriptor(PyMethodDescrObject *descr, _Py_CODEUNIT *instr,
         return -1;
     }
 
-    switch (descr->d_method->ml_flags &
-        (METH_VARARGS | METH_FASTCALL | METH_NOARGS | METH_O |
-        METH_KEYWORDS | METH_METHOD)) {
+    switch (descr->d_method->ml_flags & METH_CALL_MASK) {
         case METH_NOARGS: {
             if (nargs != 1) {
                 SPECIALIZATION_FAIL(PRECALL, SPEC_FAIL_WRONG_NUMBER_ARGUMENTS);

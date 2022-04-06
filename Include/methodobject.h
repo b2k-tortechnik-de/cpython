@@ -118,6 +118,10 @@ PyAPI_FUNC(PyObject *) PyCMethod_New(PyMethodDef *, PyObject *,
 #define METH_METHOD 0x0200
 #endif
 
+/* Bitwise of all flags that determine the signature of the called function */
+#define METH_CALL_MASK \
+    (METH_VARARGS | METH_FASTCALL | METH_NOARGS \
+    | METH_O | METH_KEYWORDS | METH_METHOD)
 
 #ifndef Py_LIMITED_API
 #  define Py_CPYTHON_METHODOBJECT_H

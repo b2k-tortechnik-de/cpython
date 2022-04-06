@@ -4853,7 +4853,10 @@ handle_eval_breaker:
             DEOPT_IF(total_args != 1, PRECALL);
             PyObject *callable = PEEK(total_args + 1);
             DEOPT_IF(!PyCFunction_CheckExact(callable), PRECALL);
-            DEOPT_IF(PyCFunction_GET_FLAGS(callable) != METH_O, PRECALL);
+            DEOPT_IF(
+                (PyCFunction_GET_FLAGS(callable) & METH_CALL_MASK) != METH_O,
+                PRECALL
+            );
             STAT_INC(PRECALL, hit);
             SKIP_CALL();
             PyCFunction cfunc = PyCFunction_GET_FUNCTION(callable);
@@ -4886,7 +4889,8 @@ handle_eval_breaker:
             int total_args = oparg + is_meth;
             PyObject *callable = PEEK(total_args + 1);
             DEOPT_IF(!PyCFunction_CheckExact(callable), PRECALL);
-            DEOPT_IF(PyCFunction_GET_FLAGS(callable) != METH_FASTCALL,
+            DEOPT_IF(
+                (PyCFunction_GET_FLAGS(callable) & METH_CALL_MASK) != METH_FASTCALL,
                 PRECALL);
             STAT_INC(PRECALL, hit);
             SKIP_CALL();
@@ -4925,7 +4929,7 @@ handle_eval_breaker:
             int total_args = oparg + is_meth;
             PyObject *callable = PEEK(total_args + 1);
             DEOPT_IF(!PyCFunction_CheckExact(callable), PRECALL);
-            DEOPT_IF(PyCFunction_GET_FLAGS(callable) !=
+            DEOPT_IF((PyCFunction_GET_FLAGS(callable) & METH_CALL_MASK) !=
                 (METH_FASTCALL | METH_KEYWORDS), PRECALL);
             STAT_INC(PRECALL, hit);
             SKIP_CALL();
@@ -5051,7 +5055,7 @@ handle_eval_breaker:
             DEOPT_IF(total_args != 2, PRECALL);
             DEOPT_IF(!Py_IS_TYPE(callable, &PyMethodDescr_Type), PRECALL);
             PyMethodDef *meth = ((PyMethodDescrObject *)callable)->d_method;
-            DEOPT_IF(meth->ml_flags != METH_O, PRECALL);
+            DEOPT_IF((meth->ml_flags & METH_CALL_MASK) != METH_O, PRECALL);
             STAT_INC(PRECALL, hit);
             SKIP_CALL();
             PyCFunction cfunc = meth->ml_meth;
@@ -5083,7 +5087,10 @@ handle_eval_breaker:
             PyObject *callable = PEEK(total_args + 1);
             DEOPT_IF(!Py_IS_TYPE(callable, &PyMethodDescr_Type), PRECALL);
             PyMethodDef *meth = ((PyMethodDescrObject *)callable)->d_method;
-            DEOPT_IF(meth->ml_flags != (METH_FASTCALL|METH_KEYWORDS), PRECALL);
+            DEOPT_IF(
+                (meth->ml_flags & METH_CALL_MASK) != (METH_FASTCALL|METH_KEYWORDS),
+                PRECALL
+            );
             STAT_INC(PRECALL, hit);
             SKIP_CALL();
             int nargs = total_args-1;
@@ -5118,7 +5125,7 @@ handle_eval_breaker:
             PyObject *callable = SECOND();
             DEOPT_IF(!Py_IS_TYPE(callable, &PyMethodDescr_Type), PRECALL);
             PyMethodDef *meth = ((PyMethodDescrObject *)callable)->d_method;
-            DEOPT_IF(meth->ml_flags != METH_NOARGS, PRECALL);
+            DEOPT_IF((meth->ml_flags & METH_CALL_MASK) != METH_NOARGS, PRECALL);
             STAT_INC(PRECALL, hit);
             SKIP_CALL();
             PyCFunction cfunc = meth->ml_meth;
@@ -5150,7 +5157,7 @@ handle_eval_breaker:
             /* Builtin METH_FASTCALL methods, without keywords */
             DEOPT_IF(!Py_IS_TYPE(callable, &PyMethodDescr_Type), PRECALL);
             PyMethodDef *meth = ((PyMethodDescrObject *)callable)->d_method;
-            DEOPT_IF(meth->ml_flags != METH_FASTCALL, PRECALL);
+            DEOPT_IF((meth->ml_flags & METH_CALL_MASK) != METH_FASTCALL, PRECALL);
             STAT_INC(PRECALL, hit);
             SKIP_CALL();
             _PyCFunctionFast cfunc = (_PyCFunctionFast)(void(*)(void))meth->ml_meth;
