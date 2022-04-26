@@ -3193,11 +3193,9 @@ compiler_while(struct compiler *c, stmt_ty s)
 
     compiler_use_next_block(c, body);
     VISIT_SEQ(c, stmt, s->v.While.body);
-    SET_LOC(c, s);
-    if (!compiler_jump_if(c, s->v.While.test, body, 1)) {
-        return 0;
-    }
 
+    UNSET_LOC(c);
+    ADDOP_JUMP(c, JUMP, loop);
     compiler_pop_fblock(c, WHILE_LOOP, loop);
 
     compiler_use_next_block(c, anchor);
