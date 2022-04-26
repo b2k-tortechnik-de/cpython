@@ -216,6 +216,7 @@ gen_send_ex2(PyGenObject *gen, PyObject *arg, PyObject **presult,
     }
 
     gen->gi_frame_state = FRAME_EXECUTING;
+    CALL_STAT_INC(pyeval_gen_calls);
     result = _PyEval_EvalFrame(tstate, frame, exc);
     if (gen->gi_frame_state == FRAME_EXECUTING) {
         gen->gi_frame_state = FRAME_COMPLETED;

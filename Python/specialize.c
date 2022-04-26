@@ -175,6 +175,7 @@ static void
 print_call_stats(FILE *out, CallStats *stats)
 {
     fprintf(out, "Calls to PyEval_EvalDefault: %" PRIu64 "\n", stats->pyeval_calls);
+    fprintf(out, "Calls to PyEval_EvalDefault in generator: %" PRIu64 "\n", stats->pyeval_gen_calls);
     fprintf(out, "Calls to Python functions inlined: %" PRIu64 "\n", stats->inlined_py_calls);
     fprintf(out, "Frames pushed: %" PRIu64 "\n", stats->frames_pushed);
     fprintf(out, "Frame objects created: %" PRIu64 "\n", stats->frame_objects_created);
