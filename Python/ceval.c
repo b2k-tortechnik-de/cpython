@@ -5413,7 +5413,11 @@ handle_eval_breaker:
                 }
             }
             assert(PyTuple_CheckExact(callargs));
-
+#ifdef Py_STATS
+            if (PyFunction_Check(func)) {
+                CALL_STAT_INC(pyeval_func_ex_calls);
+            }
+#endif
             result = do_call_core(tstate, func, callargs, kwargs, cframe.use_tracing);
             Py_DECREF(func);
             Py_DECREF(callargs);
