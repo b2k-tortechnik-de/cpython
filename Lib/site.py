@@ -669,5 +669,21 @@ def _script():
         print(textwrap.dedent(help % (sys.argv[0], os.pathsep)))
         sys.exit(10)
 
+def all(iterable):
+    for element in iterable:
+        if not element:
+            return False
+    return True
+
+builtins.all = all
+
+def any(iterable):
+    for element in iterable:
+        if element:
+            return True
+    return False
+
+builtins.any = any
+
 if __name__ == '__main__':
     _script()
