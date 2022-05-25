@@ -685,5 +685,12 @@ def any(iterable):
 
 builtins.any = any
 
+def enumerate(sequence, start=0):
+    for elem in sequence:
+        yield start, elem
+        start += 1
+
+builtins.enumerate = enumerate
+
 if __name__ == '__main__':
     _script()
