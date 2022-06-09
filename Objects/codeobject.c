@@ -337,6 +337,8 @@ init_code(PyCodeObject *co, struct _PyCodeConstructor *con)
     co->_co_code = NULL;
 
     co->co_warmup = QUICKENING_INITIAL_WARMUP_VALUE;
+    co->_co_linearray_entry_size = 0;
+    co->_co_linearray = NULL;
     memcpy(_PyCode_CODE(co), PyBytes_AS_STRING(con->code),
            PyBytes_GET_SIZE(con->code));
 }
@@ -695,14 +697,76 @@ failed:
    lnotab_notes.txt for the details of the lnotab representation.
 */
 
+static int
+init_linearray(PyCodeObject *co)
+{
+    assert(co->_co_linearray == NULL);
+    PyCodeAddressRange bounds;
+    int size;
+    int max_line = 0;
+    _PyCode_InitAddressRange(co, &bounds);
+    while (1) {
+        if (!_PyLineTable_NextAddressRange(&bounds)) {
+            break;
+        }
+        if (bounds.ar_line > max_line) {
+            max_line = bounds.ar_line;
+        }
+    }
+    if (max_line < (1 << 15)) {
+        size = 2;
+    }
+    else {
+        size = 4;
+    }
+    co->_co_linearray = PyMem_Malloc(Py_SIZE(co)*size);
+    if (co->_co_linearray == NULL) {
+        return -1;
+    }
+    co->_co_linearray_entry_size = size;
+    _PyCode_InitAddressRange(co, &bounds);
+    while (1) {
+        if (!_PyLineTable_NextAddressRange(&bounds)) {
+            break;
+        }
+        int index = bounds.ar_start;
+        while (index < bounds.ar_end && index < Py_SIZE(co)) {
+            if (size == 2) {
+                assert(((int16_t)bounds.ar_line) == bounds.ar_line);
+                ((int16_t *)co->_co_linearray)[index] = bounds.ar_line;
+            }
+            else {
+                assert(size == 4);
+                ((int32_t *)co->_co_linearray)[index] = bounds.ar_line;
+            }
+            index++;
+        }
+    }
+    return 0;
+}
+
 int
 PyCode_Addr2Line(PyCodeObject *co, int addrq)
 {
+    PyCodeAddressRange bounds;
     if (addrq < 0) {
         return co->co_firstlineno;
     }
     assert(addrq >= 0 && addrq < _PyCode_NBYTES(co));
-    PyCodeAddressRange bounds;
+    if (co->_co_linearray == NULL) {
+        if (init_linearray(co)) {
+            goto fallback;
+        }
+    }
+    int index = addrq >> 1;
+    if (co->_co_linearray_entry_size == 2) {
+        return ((int16_t *)co->_co_linearray)[index];
+    }
+    else {
+        assert(co->_co_linearray_entry_size == 4);
+        return ((int32_t *)co->_co_linearray)[index];
+    }
+fallback:
     _PyCode_InitAddressRange(co, &bounds);
     return _PyCode_CheckLineNumber(addrq, &bounds);
 }
@@ -1543,6 +1607,9 @@ code_dealloc(PyCodeObject *co)
     }
     if (co->co_warmup == 0) {
         _Py_QuickenedCount--;
+    }
+    if (co->_co_linearray != NULL) {
+        PyMem_Free(co->_co_linearray);
     }
     PyObject_Free(co);
 }

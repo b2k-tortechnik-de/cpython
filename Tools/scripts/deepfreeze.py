@@ -250,6 +250,7 @@ class Printer:
             self.write(f".co_exceptiontable = {co_exceptiontable},")
             self.field(code, "co_flags")
             self.write(".co_warmup = QUICKENING_INITIAL_WARMUP_VALUE,")
+            self.write("._co_linearray_entry_size = 0,")
             self.field(code, "co_argcount")
             self.field(code, "co_posonlyargcount")
             self.field(code, "co_kwonlyargcount")
@@ -267,6 +268,7 @@ class Printer:
             self.write(f".co_qualname = {co_qualname},")
             self.write(f".co_linetable = {co_linetable},")
             self.write(f".co_code_adaptive = {co_code_adaptive},")
+            self.write("._co_linearray = NULL,")
         name_as_code = f"(PyCodeObject *)&{name}"
         self.deallocs.append(f"_PyStaticCode_Dealloc({name_as_code});")
         self.interns.append(f"_PyStaticCode_InternStrings({name_as_code})")

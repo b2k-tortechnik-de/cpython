@@ -6817,7 +6817,7 @@ call_trace(Py_tracefunc func, PyObject *obj,
     assert(_PyInterpreterFrame_LASTI(frame) >= 0);
     initialize_trace_info(&tstate->trace_info, frame);
     int addr = _PyInterpreterFrame_LASTI(frame) * sizeof(_Py_CODEUNIT);
-    f->f_lineno = _PyCode_CheckLineNumber(addr, &tstate->trace_info.bounds);
+    f->f_lineno = PyCode_Addr2Line(frame->f_code, addr);
     result = func(obj, f, what, arg);
     f->f_lineno = 0;
     PyThreadState_LeaveTracing(tstate);
@@ -6854,7 +6854,6 @@ maybe_call_line_trace(Py_tracefunc func, PyObject *obj,
        represents a jump backwards, update the frame's line number and
        then call the trace function if we're tracing source lines.
     */
-    initialize_trace_info(&tstate->trace_info, frame);
     int entry_point = 0;
     _Py_CODEUNIT *code = _PyCode_CODE(frame->f_code);
     while (_PyOpcode_Deopt[_Py_OPCODE(code[entry_point])] != RESUME) {
@@ -6865,10 +6864,10 @@ maybe_call_line_trace(Py_tracefunc func, PyObject *obj,
         lastline = -1;
     }
     else {
-        lastline = _PyCode_CheckLineNumber(instr_prev*sizeof(_Py_CODEUNIT), &tstate->trace_info.bounds);
+        lastline = PyCode_Addr2Line(frame->f_code, instr_prev*sizeof(_Py_CODEUNIT));
     }
     int addr = _PyInterpreterFrame_LASTI(frame) * sizeof(_Py_CODEUNIT);
-    int line = _PyCode_CheckLineNumber(addr, &tstate->trace_info.bounds);
+    int line = PyCode_Addr2Line(frame->f_code, addr);
     PyFrameObject *f = _PyFrame_GetFrameObject(frame);
     if (f == NULL) {
         return -1;
@@ -7843,9 +7842,9 @@ maybe_dtrace_line(_PyInterpreterFrame *frame,
        instruction window, reset the window.
     */
     initialize_trace_info(trace_info, frame);
-    int lastline = _PyCode_CheckLineNumber(instr_prev*sizeof(_Py_CODEUNIT), &trace_info->bounds);
+    int lastline = PyCode_Addr2Line(frame->f_code, instr_prev*sizeof(_Py_CODEUNIT));
     int addr = _PyInterpreterFrame_LASTI(frame) * sizeof(_Py_CODEUNIT);
-    int line = _PyCode_CheckLineNumber(addr, &trace_info->bounds);
+    int line = PyCode_Addr2Line(frame->f_code, addr);
     if (line != -1) {
         /* Trace backward edges or first instruction of a new line */
         if (_PyInterpreterFrame_LASTI(frame) < instr_prev ||
