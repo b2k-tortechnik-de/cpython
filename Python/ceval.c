@@ -4848,7 +4848,7 @@ handle_eval_breaker:
             Py_DECREF(obj);
             STACK_SHRINK(2);
             SET_TOP(res);
-            DISPATCH();
+            NOTRACE_DISPATCH();
         }
 
         TARGET(CALL_NO_KW_STR_1) {
@@ -4869,7 +4869,7 @@ handle_eval_breaker:
                 goto error;
             }
             CHECK_EVAL_BREAKER();
-            DISPATCH();
+            NOTRACE_DISPATCH();
         }
 
         TARGET(CALL_NO_KW_TUPLE_1) {
