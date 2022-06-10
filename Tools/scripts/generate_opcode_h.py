@@ -117,6 +117,7 @@ def main(opcode_py, outfile='Include/opcode.h', internaloutfile='Include/interna
 
         iobj.write("\nextern const uint8_t _PyOpcode_Caches[256];\n")
         iobj.write("\nextern const uint8_t _PyOpcode_Deopt[256];\n")
+        iobj.write("\nextern const uint8_t _PyOpcode_NoSuperinstructions[256];\n")
         iobj.write("\nextern const uint8_t _PyOpcode_Original[256];\n")
         iobj.write("\n#ifdef NEED_OPCODE_TABLES\n")
         write_int_array_from_ops("_PyOpcode_RelativeJump", opcode['hasjrel'], iobj)
@@ -143,6 +144,13 @@ def main(opcode_py, outfile='Include/opcode.h', internaloutfile='Include/interna
             if opt.startswith("EXTENDED_ARG"):
                 deopt = "EXTENDED_ARG_QUICK"
             iobj.write(f"    [{opt}] = {deopt},\n")
+        iobj.write("};\n")
+        iobj.write("\nconst uint8_t _PyOpcode_NoSuperinstructions[256] = {\n")
+        for opt, deopt in sorted(deoptcodes.items()):
+            if "__" in opt or "CALL" in opt or "EXTENDED_ARG" in opt:
+                iobj.write(f"    [{opt}] = {deopt},\n")
+            else:
+                iobj.write(f"    [{opt}] = {opt},\n")
         iobj.write("};\n")
         iobj.write("#endif   // NEED_OPCODE_TABLES\n")
 
