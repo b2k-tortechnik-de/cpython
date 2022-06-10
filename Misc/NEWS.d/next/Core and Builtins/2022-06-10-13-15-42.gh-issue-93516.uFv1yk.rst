@@ -1,0 +1,2 @@
+Use specialized forms of instructions where possible when tracing. Reduces
+the slowdown due to tracing substantially.
