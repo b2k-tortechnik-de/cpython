@@ -54,6 +54,12 @@ _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
     assert(src->stacktop >= src->f_code->co_nlocalsplus);
     Py_ssize_t size = ((char*)&src->localsplus[src->stacktop]) - (char *)src;
     memcpy(dest, src, size);
+    if (src->frame_obj != NULL) {
+        assert(src->frame_obj->f_frame = src);
+        assert(dest->frame_obj = src->frame_obj);
+        dest->frame_obj->f_frame = dest;
+        src->frame_obj = NULL;
+    }
 }
 
 
