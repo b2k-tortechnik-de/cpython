@@ -246,7 +246,8 @@ static inline size_t
 _PyType_PreHeaderSize(PyTypeObject *tp)
 {
     return _PyType_IS_GC(tp) * sizeof(PyGC_Head) +
-        _PyType_HasFeature(tp, Py_TPFLAGS_MANAGED_DICT) * 2 * sizeof(PyObject *);
+        _PyType_HasFeature(tp, Py_TPFLAGS_MANAGED_DICT | Py_TPFLAGS_MANAGED_WEAKREFS)
+        * 2 * sizeof(PyObject *);
 }
 
 void _PyObject_GC_Link(PyObject *op);

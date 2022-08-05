@@ -1316,6 +1316,7 @@ subtype_traverse(PyObject *self, visitproc visit, void *arg)
         }
     }
     else if (type->tp_dictoffset != base->tp_dictoffset) {
+        assert(type->tp_dictoffset != -1);
         PyObject **dictptr = _PyObject_ComputedDictPointer(self);
         if (dictptr && *dictptr)
             Py_VISIT(*dictptr);
@@ -2738,46 +2739,6 @@ error:
     return NULL;
 }
 
-
-static void
-type_new_slots_bases(type_new_ctx *ctx)
-{
-    Py_ssize_t nbases = PyTuple_GET_SIZE(ctx->bases);
-    if (nbases > 1 &&
-        ((ctx->may_add_dict && ctx->add_dict == 0) ||
-         (ctx->may_add_weak && ctx->add_weak == 0)))
-    {
-        for (Py_ssize_t i = 0; i < nbases; i++) {
-            PyObject *obj = PyTuple_GET_ITEM(ctx->bases, i);
-            if (obj == (PyObject *)ctx->base) {
-                /* Skip primary base */
-                continue;
-            }
-            PyTypeObject *base = _PyType_CAST(obj);
-
-            if (ctx->may_add_dict && ctx->add_dict == 0 &&
-                base->tp_dictoffset != 0)
-            {
-                ctx->add_dict++;
-            }
-            if (ctx->may_add_weak && ctx->add_weak == 0 &&
-                base->tp_weaklistoffset != 0)
-            {
-                ctx->add_weak++;
-            }
-            if (ctx->may_add_dict && ctx->add_dict == 0) {
-                continue;
-            }
-            if (ctx->may_add_weak && ctx->add_weak == 0) {
-                continue;
-            }
-            /* Nothing more to check */
-            break;
-        }
-    }
-}
-
-
 static int
 type_new_slots_impl(type_new_ctx *ctx, PyObject *dict)
 {
@@ -2802,8 +2763,6 @@ type_new_slots_impl(type_new_ctx *ctx, PyObject *dict)
     Py_XSETREF(ctx->slots, new_slots);
     ctx->nslot = PyTuple_GET_SIZE(new_slots);
 
-    /* Secondary bases may provide weakrefs or dict */
-    type_new_slots_bases(ctx);
     return 0;
 }
 
@@ -3079,29 +3038,13 @@ type_new_descriptors(const type_new_ctx *ctx, PyTypeObject *type)
         }
     }
 
+    /* This doesn't necessary make these managed, it might be
+     * overriden by layout. But we signal that we want this. */
     if (ctx->add_dict) {
-        if (ctx->base->tp_itemsize) {
-            type->tp_dictoffset = -(long)sizeof(PyObject *);
-            slotoffset += sizeof(PyObject *);
-        }
-        else {
-            assert((type->tp_flags & Py_TPFLAGS_MANAGED_DICT) == 0);
-            type->tp_flags |= Py_TPFLAGS_MANAGED_DICT;
-        }
+        type->tp_flags |= Py_TPFLAGS_MANAGED_DICT;
     }
-
     if (ctx->add_weak) {
-        assert(!ctx->base->tp_itemsize);
-        if (type->tp_flags & Py_TPFLAGS_MANAGED_DICT) {
-            type->tp_weaklistoffset = -4 * sizeof(PyObject *);
-        }
-        else {
-            type->tp_weaklistoffset = slotoffset;
-            slotoffset += sizeof(PyObject *);
-        }
-    }
-    if (type->tp_flags & Py_TPFLAGS_MANAGED_DICT) {
-        type->tp_dictoffset = -slotoffset - sizeof(PyObject *)*3;
+        type->tp_flags |= Py_TPFLAGS_MANAGED_WEAKREFS;
     }
 
     type->tp_basicsize = slotoffset;
@@ -6116,20 +6059,14 @@ inherit_special(PyTypeObject *type, PyTypeObject *base)
         if (type->tp_clear == NULL)
             type->tp_clear = base->tp_clear;
     }
-    type->tp_flags |= (base->tp_flags & Py_TPFLAGS_MANAGED_DICT);
 
     if (type->tp_basicsize == 0)
         type->tp_basicsize = base->tp_basicsize;
 
     /* Copy other non-function slots */
 
-#define COPYVAL(SLOT) \
-    if (type->SLOT == 0) { type->SLOT = base->SLOT; }
-
-    COPYVAL(tp_itemsize);
-    COPYVAL(tp_weaklistoffset);
-    COPYVAL(tp_dictoffset);
-#undef COPYVAL
+    if (type->tp_itemsize == 0)
+        { type->tp_itemsize = base->tp_itemsize; }
 
     /* Setup fast subclass flags */
     if (PyType_IsSubtype(base, (PyTypeObject*)PyExc_BaseException)) {
@@ -6344,8 +6281,19 @@ inherit_slots(PyTypeObject *type, PyTypeObject *base)
         {
             type->tp_flags |= Py_TPFLAGS_METHOD_DESCRIPTOR;
         }
+        if (base->tp_flags & Py_TPFLAGS_MANAGED_WEAKREFS) {
+            type->tp_flags |= Py_TPFLAGS_MANAGED_WEAKREFS;
+        }
+        else {
+            COPYSLOT(tp_weaklistoffset);
+        }
+        if (base->tp_flags & Py_TPFLAGS_MANAGED_DICT) {
+            type->tp_flags |= Py_TPFLAGS_MANAGED_DICT;
+        }
+        else {
+            COPYSLOT(tp_dictoffset);
+        }
         COPYSLOT(tp_descr_set);
-        COPYSLOT(tp_dictoffset);
         COPYSLOT(tp_init);
         COPYSLOT(tp_alloc);
         COPYSLOT(tp_is_gc);
@@ -6730,6 +6678,32 @@ type_ready_set_new(PyTypeObject *type)
     return 0;
 }
 
+static void
+type_ready_set_dict_and_weakrefs(PyTypeObject *type)
+{
+    assert(type->tp_dictoffset >= 0);
+    assert(type->tp_weaklistoffset >= 0);
+    if (type->tp_dictoffset || type->tp_weaklistoffset) {
+        /* One or other of __dict__ and __weakrefs__ is explicit, make them both so */
+        if (type->tp_dictoffset == 0 && (type->tp_flags & Py_TPFLAGS_MANAGED_DICT)) {
+            type->tp_dictoffset = type->tp_basicsize;
+            type->tp_basicsize += sizeof(PyObject *);
+        }
+        if (type->tp_weaklistoffset == 0 && (type->tp_flags & Py_TPFLAGS_MANAGED_WEAKREFS)) {
+            type->tp_weaklistoffset = type->tp_basicsize;
+            type->tp_basicsize += sizeof(PyObject *);
+        }
+        type->tp_flags &= ~(Py_TPFLAGS_MANAGED_DICT | Py_TPFLAGS_MANAGED_WEAKREFS);
+    }
+    else if (type->tp_flags & (Py_TPFLAGS_MANAGED_WEAKREFS | Py_TPFLAGS_MANAGED_DICT)) {
+        if (type->tp_flags & Py_TPFLAGS_MANAGED_WEAKREFS) {
+            type->tp_weaklistoffset = -(Py_ssize_t)(4 * sizeof(PyObject *));
+        }
+        if (type->tp_flags & Py_TPFLAGS_MANAGED_DICT) {
+            type->tp_dictoffset = -1;
+        }
+    }
+}
 
 static int
 type_ready_post_checks(PyTypeObject *type)
@@ -6743,6 +6717,31 @@ type_ready_post_checks(PyTypeObject *type)
                      "type %s has the Py_TPFLAGS_HAVE_GC flag "
                      "but has no traverse function",
                      type->tp_name);
+        return -1;
+    }
+    if ((type->tp_flags & (Py_TPFLAGS_MANAGED_WEAKREFS | Py_TPFLAGS_MANAGED_DICT))
+        && (type->tp_weaklistoffset > 0 || type->tp_dictoffset > 0))
+    {
+        PyErr_Format(PyExc_SystemError,
+                "type %s has the Py_TPFLAGS_MANAGED_WEAKREFS"
+                " or Py_TPFLAGS_MANAGED_DICT flag set "
+                "but has explicit weakref or dict offsets",
+                type->tp_name);
+        return -1;
+    }
+    if ((type->tp_flags & Py_TPFLAGS_MANAGED_DICT) && type->tp_dictoffset != -1) {
+        PyErr_Format(PyExc_SystemError,
+                "type %s has the Py_TPFLAGS_MANAGED_DICT flag set "
+                "but the offset hasn't been set properly",
+                type->tp_name);
+        return -1;
+    }
+    if ((type->tp_flags & Py_TPFLAGS_MANAGED_WEAKREFS) &&
+        type->tp_weaklistoffset != -4 * (Py_ssize_t)sizeof(PyObject *)) {
+        PyErr_Format(PyExc_SystemError,
+                "type %s has the Py_TPFLAGS_MANAGED_WEAKREFS flag set "
+                "but the offset hasn't been set properly",
+                type->tp_name);
         return -1;
     }
     return 0;
@@ -6790,6 +6789,7 @@ type_ready(PyTypeObject *type)
     if (type_ready_add_subclasses(type) < 0) {
         return -1;
     }
+    type_ready_set_dict_and_weakrefs(type);
     if (type_ready_post_checks(type) < 0) {
         return -1;
     }

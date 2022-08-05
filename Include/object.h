@@ -355,10 +355,11 @@ given type object has a specified feature.
 /* Track types initialized using _PyStaticType_InitBuiltin(). */
 #define _Py_TPFLAGS_STATIC_BUILTIN (1 << 1)
 
-/* Placement of dict (and values) pointers are managed by the VM, not by the type.
- * The VM will automatically set tp_dictoffset. Should not be used for variable sized
- * classes, such as classes that extend tuple.
+/* Placement of dict/values and weakrefs pointers are managed by the VM, not by the type.
+ * The VM will automatically set tp_dictoffset and tp_weakreflost_offset.
+ * Should not be used for variable sized classes, such as classes that extend tuple.
  */
+#define Py_TPFLAGS_MANAGED_WEAKREFS (1 << 3)
 #define Py_TPFLAGS_MANAGED_DICT (1 << 4)
 
 /* Set if instances of the type object are treated as sequences for pattern matching */

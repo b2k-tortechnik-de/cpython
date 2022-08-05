@@ -1063,6 +1063,7 @@ _PyObject_ComputedDictPointer(PyObject *obj)
     dictoffset = tp->tp_dictoffset;
     if (dictoffset == 0)
         return NULL;
+    assert(dictoffset != -1);
     if (dictoffset < 0) {
         Py_ssize_t tsize = Py_SIZE(obj);
         if (tsize < 0) {

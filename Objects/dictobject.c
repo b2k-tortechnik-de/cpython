@@ -5349,7 +5349,7 @@ static int
 init_inline_values(PyObject *obj, PyTypeObject *tp)
 {
     assert(tp->tp_flags & Py_TPFLAGS_HEAPTYPE);
-    // assert(type->tp_dictoffset > 0);  -- TO DO Update this assert.
+    assert(tp->tp_dictoffset == -1);
     assert(tp->tp_flags & Py_TPFLAGS_MANAGED_DICT);
     PyDictKeysObject *keys = CACHED_KEYS(tp);
     assert(keys != NULL);
@@ -5655,6 +5655,7 @@ PyObject_GenericGetDict(PyObject *obj, void *context)
         }
     }
     else {
+        assert(tp->tp_dictoffset != -1);
         PyObject **dictptr = _PyObject_ComputedDictPointer(obj);
         if (dictptr == NULL) {
             PyErr_SetString(PyExc_AttributeError,
