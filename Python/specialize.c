@@ -2203,6 +2203,10 @@ _Py_Specialize_ForIter(PyObject *iter, _Py_CODEUNIT *instr)
         _Py_SET_OPCODE(*instr, FOR_ITER_RANGE);
         goto success;
     }
+//     else if (tp == &PyGen_Type) {
+//         _Py_SET_OPCODE(*instr, FOR_ITER_GENERATOR);
+//         goto success;
+//     }
     else {
         SPECIALIZATION_FAIL(FOR_ITER,
                             _PySpecialization_ClassifyIterator(iter));

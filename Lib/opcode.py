@@ -324,6 +324,7 @@ _specializations = {
     ],
     "FOR_ITER": [
         "FOR_ITER_ADAPTIVE",
+        "FOR_ITER_GENERATOR",
         "FOR_ITER_LIST",
         "FOR_ITER_RANGE",
     ],

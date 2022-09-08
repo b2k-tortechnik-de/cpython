@@ -3927,6 +3927,25 @@ handle_eval_breaker:
             DISPATCH();
         }
 
+        TARGET(FOR_ITER_GENERATOR) {
+            assert(cframe.cframe.use_tracing == 0);
+            PyGenObject *gen = (PyGenObject *)TOP();
+            DEOPT_IF(Py_TYPE(gen) != &PyGen_Type, FOR_ITER);
+            DEOPT_IF(gen->gi_frame_state != FRAME_SUSPENDED, FOR_ITER);
+            STAT_INC(FOR_ITER, hit);
+            gen->gi_frame_state = FRAME_EXECUTING;
+            _PyInterpreterFrame *gen_frame = (_PyInterpreterFrame *)gen->gi_iframe;
+            JUMPBY(INLINE_CACHE_ENTRIES_FOR_ITER);
+            frame->prev_instr = next_instr - 1;
+            frame->gen_return_offset = oparg;
+            gen_frame->previous = frame;
+            frame = cframe.cframe.current_frame = gen_frame;
+            Py_INCREF(Py_None);
+            _PyFrame_StackPush(frame, Py_None);
+            CALL_STAT_INC(inlined_py_calls);
+            goto start_frame;
+        }
+
         TARGET(BEFORE_ASYNC_WITH) {
             PyObject *mgr = TOP();
             PyObject *res;
