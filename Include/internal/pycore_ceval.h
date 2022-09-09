@@ -97,6 +97,9 @@ _PyEval_EvalFrame(PyThreadState *tstate, struct _PyInterpreterFrame *frame, int 
     return tstate->interp->eval_frame(tstate, frame, throwflag);
 }
 
+/* args may not be `NULL` even if argcount is zero
+ * as it gets treated as a pointer into a stack.
+ */
 extern PyObject*
 _PyEval_Vector(PyThreadState *tstate,
             PyFunctionObject *func, PyObject *locals,

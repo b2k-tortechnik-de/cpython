@@ -199,7 +199,8 @@ builtin___build_class__(PyObject *self, PyObject *const *args, Py_ssize_t nargs,
     }
     PyThreadState *tstate = _PyThreadState_GET();
     EVAL_CALL_STAT_INC(EVAL_CALL_BUILD_CLASS);
-    cell = _PyEval_Vector(tstate, (PyFunctionObject *)func, ns, NULL, 0, NULL);
+    PyObject *dummy_args[1];
+    cell = _PyEval_Vector(tstate, (PyFunctionObject *)func, ns, dummy_args, 0, NULL);
     if (cell != NULL) {
         if (bases != orig_bases) {
             if (PyMapping_SetItemString(ns, "__orig_bases__", orig_bases) < 0) {

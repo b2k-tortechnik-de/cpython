@@ -588,7 +588,8 @@ PyEval_EvalCode(PyObject *co, PyObject *globals, PyObject *locals)
         return NULL;
     }
     EVAL_CALL_STAT_INC(EVAL_CALL_LEGACY);
-    PyObject *res = _PyEval_Vector(tstate, func, locals, NULL, 0, NULL);
+    PyObject *dummy_args[1];
+    PyObject *res = _PyEval_Vector(tstate, func, locals, dummy_args, 0, NULL);
     Py_DECREF(func);
     return res;
 }
@@ -5496,6 +5497,7 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func,
     PyObject **localsplus, PyObject *const *args,
     Py_ssize_t argcount, PyObject *kwnames)
 {
+    assert(args != NULL); // Need to perform arithmetic on args
     PyCodeObject *co = (PyCodeObject*)func->func_code;
     const Py_ssize_t total_args = co->co_argcount + co->co_kwonlyargcount;
 
@@ -5717,6 +5719,7 @@ _PyEvalFramePushAndInit(PyThreadState *tstate, PyFunctionObject *func,
                         PyObject *locals, PyObject* const* args,
                         size_t argcount, PyObject *kwnames)
 {
+    assert(args != NULL); // initialize_locals requires this
     PyCodeObject * code = (PyCodeObject *)func->func_code;
     CALL_STAT_INC(frames_pushed);
     _PyInterpreterFrame *frame = _PyThreadState_PushFrame(tstate, code->co_framesize);
@@ -5770,6 +5773,7 @@ _PyEval_Vector(PyThreadState *tstate, PyFunctionObject *func,
                PyObject* const* args, size_t argcount,
                PyObject *kwnames)
 {
+    assert(args != NULL); // _PyEvalFramePushAndInit requires this
     /* _PyEvalFramePushAndInit consumes the references
      * to func, locals and all its arguments */
     Py_INCREF(func);

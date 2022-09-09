@@ -1,0 +1,2 @@
+Avoid undefined behavior in the interpreter by passing non-NULL empty arrays
+instead of NULL internally.
