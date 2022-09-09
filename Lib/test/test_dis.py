@@ -505,7 +505,7 @@ dis_asyncwith = """\
 %3d     >> LOAD_CONST               2 (2)
            STORE_FAST               2 (y)
            LOAD_CONST               0 (None)
-           RETURN_VALUE
+           GEN_RETURN_VALUE
 
 %3d     >> CLEANUP_THROW
            JUMP_BACKWARD           24 (to 22)

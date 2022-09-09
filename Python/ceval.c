@@ -1063,7 +1063,7 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
     cframe.pyframe.prev_instr = code;
     cframe.pyframe.stacktop = 0;
     cframe.pyframe.owner = FRAME_OWNED_BY_CSTACK;
-    cframe.pyframe.yield_offset = 0;
+    cframe.pyframe.gen_return_offset = 0;
     cframe.pyframe.previous = prev_cframe->current_frame;
     frame->previous = &cframe.pyframe;
     cframe.cframe.current_frame = frame;
@@ -1874,6 +1874,21 @@ handle_eval_breaker:
         }
 
         TARGET(RETURN_VALUE) {
+            assert((frame->f_code->co_flags & (CO_COROUTINE | CO_GENERATOR | CO_ASYNC_GENERATOR)) == 0);
+            PyObject *retval = POP();
+            assert(EMPTY());
+            _PyFrame_SetStackPointer(frame, stack_pointer);
+            TRACE_FUNCTION_EXIT();
+            DTRACE_FUNCTION_EXIT();
+            _Py_LeaveRecursiveCallTstate(tstate);
+            assert(frame != &cframe.pyframe);
+            frame = cframe.cframe.current_frame = pop_frame(tstate, frame);
+            _PyFrame_StackPush(frame, retval);
+            goto resume_frame;
+        }
+
+        TARGET(GEN_RETURN_VALUE) {
+            assert(frame->f_code->co_flags & (CO_COROUTINE | CO_GENERATOR | CO_ASYNC_GENERATOR));
             PyObject *retval = POP();
             assert(EMPTY());
             _PyFrame_SetStackPointer(frame, stack_pointer);
@@ -2092,7 +2107,6 @@ handle_eval_breaker:
             _PyInterpreterFrame *gen_frame = frame;
             frame = cframe.cframe.current_frame = gen_frame->previous;
             gen_frame->previous = NULL;
-            frame->prev_instr += frame->yield_offset;
             _PyFrame_StackPush(frame, retval);
             goto resume_frame;
         }

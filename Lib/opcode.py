@@ -118,6 +118,7 @@ def_op('LOAD_BUILD_CLASS', 71)
 def_op('LOAD_ASSERTION_ERROR', 74)
 def_op('RETURN_GENERATOR', 75)
 
+def_op('GEN_RETURN_VALUE', 81)
 def_op('LIST_TO_TUPLE', 82)
 def_op('RETURN_VALUE', 83)
 def_op('IMPORT_STAR', 84)

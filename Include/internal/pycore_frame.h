@@ -62,7 +62,7 @@ typedef struct _PyInterpreterFrame {
     // over, or (in the case of a newly-created frame) a totally invalid value:
     _Py_CODEUNIT *prev_instr;
     int stacktop;  /* Offset of TOS from localsplus  */
-    int yield_offset: 28;
+    int gen_return_offset: 28;
     int owner: 4;
     /* Locals and stack */
     PyObject *localsplus[1];

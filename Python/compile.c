@@ -110,7 +110,8 @@
          (opcode) == JUMP_BACKWARD_NO_INTERRUPT)
 
 #define IS_SCOPE_EXIT_OPCODE(opcode) \
-        ((opcode) == RETURN_VALUE || \
+        ((opcode) == GEN_RETURN_VALUE || \
+         (opcode) == RETURN_VALUE || \
          (opcode) == RAISE_VARARGS || \
          (opcode) == RERAISE)
 
@@ -290,7 +291,8 @@ basicblock_last_instr(const basicblock *b) {
 static inline int
 basicblock_returns(const basicblock *b) {
     struct instr *last = basicblock_last_instr(b);
-    return last && last->i_opcode == RETURN_VALUE;
+    return last && (
+        last->i_opcode == RETURN_VALUE || last->i_opcode == GEN_RETURN_VALUE);
 }
 
 static inline int
@@ -1059,6 +1061,8 @@ stack_effect(int opcode, int oparg, int jump)
         case LOAD_BUILD_CLASS:
             return 1;
 
+        case GEN_RETURN_VALUE:
+            return -1;
         case RETURN_VALUE:
             return -1;
         case IMPORT_STAR:
@@ -3005,7 +3009,12 @@ compiler_lambda(struct compiler *c, expr_ty e)
         co = assemble(c, 0);
     }
     else {
-        ADDOP_IN_SCOPE(c, RETURN_VALUE);
+        if (c->u->u_ste->ste_generator ||c->u->u_ste->ste_coroutine) {
+            ADDOP_IN_SCOPE(c, GEN_RETURN_VALUE);
+        }
+        else {
+            ADDOP_IN_SCOPE(c, RETURN_VALUE);
+        }
         co = assemble(c, 1);
     }
     qualname = c->u->u_qualname;
@@ -3210,7 +3219,12 @@ compiler_return(struct compiler *c, stmt_ty s)
     else if (!preserve_tos) {
         ADDOP_LOAD_CONST(c, s->v.Return.value->v.Constant.value);
     }
-    ADDOP(c, RETURN_VALUE);
+    if (c->u->u_ste->ste_generator ||c->u->u_ste->ste_coroutine) {
+        ADDOP_IN_SCOPE(c, GEN_RETURN_VALUE);
+    }
+    else {
+        ADDOP_IN_SCOPE(c, RETURN_VALUE);
+    }
 
     return 1;
 }
@@ -5371,7 +5385,12 @@ compiler_comprehension(struct compiler *c, expr_ty e, int type,
         goto error_in_scope;
 
     if (type != COMP_GENEXP) {
-        ADDOP(c, RETURN_VALUE);
+        if (c->u->u_ste->ste_generator ||c->u->u_ste->ste_coroutine) {
+            ADDOP_IN_SCOPE(c, GEN_RETURN_VALUE);
+        }
+        else {
+            ADDOP_IN_SCOPE(c, RETURN_VALUE);
+        }
     }
 
     co = assemble(c, 1);
@@ -8427,7 +8446,7 @@ guarantee_lineno_for_exits(basicblock *entryblock, int firstlineno) {
             continue;
         }
         if (last->i_loc.lineno < 0) {
-            if (last->i_opcode == RETURN_VALUE) {
+            if (last->i_opcode == RETURN_VALUE || last->i_opcode == GEN_RETURN_VALUE) {
                 for (int i = 0; i < b->b_iused; i++) {
                     assert(b->b_instr[i].i_loc.lineno < 0);
 
@@ -8557,9 +8576,15 @@ assemble(struct compiler *c, int addNone)
     /* Make sure every block that falls off the end returns None. */
     if (!basicblock_returns(CFG_BUILDER(c)->g_curblock)) {
         UNSET_LOC(c);
-        if (addNone)
+        if (addNone) {
             ADDOP_LOAD_CONST(c, Py_None);
-        ADDOP(c, RETURN_VALUE);
+        }
+        if (c->u->u_ste->ste_generator ||c->u->u_ste->ste_coroutine) {
+            ADDOP_IN_SCOPE(c, GEN_RETURN_VALUE);
+        }
+        else {
+            ADDOP_IN_SCOPE(c, RETURN_VALUE);
+        }
     }
 
     assert(PyDict_GET_SIZE(c->u->u_varnames) < INT_MAX);
