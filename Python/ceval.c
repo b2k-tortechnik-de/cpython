@@ -216,6 +216,8 @@ _PyEvalFramePushAndInit(PyThreadState *tstate, PyFunctionObject *func,
                         size_t argcount, PyObject *kwnames);
 static void
 _PyEvalFrameClearAndPop(PyThreadState *tstate, _PyInterpreterFrame *frame);
+static void clear_thread_frame(PyThreadState *tstate, _PyInterpreterFrame *frame);
+static void clear_gen_frame(PyThreadState *tstate, _PyInterpreterFrame *frame);
 
 #define NAME_ERROR_MSG \
     "name '%.200s' is not defined"
@@ -974,15 +976,7 @@ trace_function_exit(PyThreadState *tstate, _PyInterpreterFrame *frame, PyObject 
     }
     return 0;
 }
-
-static _PyInterpreterFrame *
-pop_frame(PyThreadState *tstate, _PyInterpreterFrame *frame)
-{
-    _PyInterpreterFrame *prev_frame = frame->previous;
-    _PyEvalFrameClearAndPop(tstate, frame);
-    return prev_frame;
-}
-
+//
 // GH-89279: Must be a macro to be sure it's inlined by MSVC.
 #define is_method(stack_pointer, args) (PEEK((args)+2) != NULL)
 
@@ -1882,7 +1876,9 @@ handle_eval_breaker:
             DTRACE_FUNCTION_EXIT();
             _Py_LeaveRecursiveCallTstate(tstate);
             assert(frame != &cframe.pyframe);
-            frame = cframe.cframe.current_frame = pop_frame(tstate, frame);
+            _PyInterpreterFrame *prev_frame = frame->previous;
+            clear_thread_frame(tstate, frame);
+            frame = cframe.cframe.current_frame = prev_frame;
             _PyFrame_StackPush(frame, retval);
             goto resume_frame;
         }
@@ -1896,8 +1892,11 @@ handle_eval_breaker:
             DTRACE_FUNCTION_EXIT();
             _Py_LeaveRecursiveCallTstate(tstate);
             assert(frame != &cframe.pyframe);
-            frame = cframe.cframe.current_frame = pop_frame(tstate, frame);
+            _PyInterpreterFrame *prev_frame = frame->previous;
+            clear_gen_frame(tstate, frame);
+            frame = cframe.cframe.current_frame = prev_frame;
             _PyFrame_StackPush(frame, retval);
+            frame->prev_instr += frame->gen_return_offset;
             goto resume_frame;
         }
 
@@ -5230,7 +5229,9 @@ exit_unwind:
     assert(_PyErr_Occurred(tstate));
     _Py_LeaveRecursiveCallTstate(tstate);
     assert(frame != &cframe.pyframe);
-    frame = cframe.cframe.current_frame = pop_frame(tstate, frame);
+    _PyInterpreterFrame *prev_frame = frame->previous;
+    _PyEvalFrameClearAndPop(tstate, frame);
+    frame = cframe.cframe.current_frame = prev_frame;
     if (frame == &cframe.pyframe) {
         assert(_PyFrame_IsIncomplete(frame));
         /* Restore previous cframe and exit */
@@ -5795,27 +5796,40 @@ fail:
 }
 
 static void
+clear_thread_frame(PyThreadState *tstate, _PyInterpreterFrame * frame)
+{
+    assert(frame->owner == FRAME_OWNED_BY_THREAD);
+    // Make sure that this is, indeed, the top frame. We can't check this in
+    // _PyThreadState_PopFrame, since f_code is already cleared at that point:
+    assert((PyObject **)frame + frame->f_code->co_framesize ==
+        tstate->datastack_top);
+    tstate->recursion_remaining--;
+    assert(frame->frame_obj == NULL || frame->frame_obj->f_frame == frame);
+    _PyFrame_Clear(frame);
+    tstate->recursion_remaining++;
+    _PyThreadState_PopFrame(tstate, frame);
+}
+
+static void
+clear_gen_frame(PyThreadState *tstate, _PyInterpreterFrame * frame)
+{
+    assert(frame->owner == FRAME_OWNED_BY_GENERATOR);
+    _PyFrame_GetGenerator(frame)->gi_frame_state = FRAME_CLEARED;
+    tstate->recursion_remaining--;
+    assert(frame->frame_obj == NULL || frame->frame_obj->f_frame == frame);
+    _PyFrame_Clear(frame);
+    tstate->recursion_remaining++;
+    frame->previous = NULL;
+}
+
+static void
 _PyEvalFrameClearAndPop(PyThreadState *tstate, _PyInterpreterFrame * frame)
 {
     if (frame->owner == FRAME_OWNED_BY_THREAD) {
-        // Make sure that this is, indeed, the top frame. We can't check this in
-        // _PyThreadState_PopFrame, since f_code is already cleared at that point:
-        assert((PyObject **)frame + frame->f_code->co_framesize ==
-            tstate->datastack_top);
-        tstate->recursion_remaining--;
-        assert(frame->frame_obj == NULL || frame->frame_obj->f_frame == frame);
-        _PyFrame_Clear(frame);
-        tstate->recursion_remaining++;
-        _PyThreadState_PopFrame(tstate, frame);
+        clear_thread_frame(tstate, frame);
     }
     else {
-        assert(frame->owner == FRAME_OWNED_BY_GENERATOR);
-        _PyFrame_GetGenerator(frame)->gi_frame_state = FRAME_CLEARED;
-        tstate->recursion_remaining--;
-        assert(frame->frame_obj == NULL || frame->frame_obj->f_frame == frame);
-        _PyFrame_Clear(frame);
-        tstate->recursion_remaining++;
-        frame->previous = NULL;
+        clear_gen_frame(tstate, frame);
     }
 }
 
