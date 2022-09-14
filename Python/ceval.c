@@ -1890,6 +1890,9 @@ handle_eval_breaker:
             _PyFrame_SetStackPointer(frame, stack_pointer);
             TRACE_FUNCTION_EXIT();
             DTRACE_FUNCTION_EXIT();
+            PyGenObject *gen = _PyFrame_GetGenerator(frame);
+            tstate->exc_info = gen->gi_exc_state.previous_item;
+            gen->gi_exc_state.previous_item = NULL;
             _Py_LeaveRecursiveCallTstate(tstate);
             assert(frame != &cframe.pyframe);
             _PyInterpreterFrame *prev_frame = frame->previous;
@@ -2098,7 +2101,10 @@ handle_eval_breaker:
             assert(oparg == STACK_LEVEL());
             assert(frame != &cframe.pyframe);
             PyObject *retval = POP();
-            _PyFrame_GetGenerator(frame)->gi_frame_state = FRAME_SUSPENDED;
+            PyGenObject *gen = _PyFrame_GetGenerator(frame);
+            gen->gi_frame_state = FRAME_SUSPENDED;
+            tstate->exc_info = gen->gi_exc_state.previous_item;
+            gen->gi_exc_state.previous_item = NULL;
             _PyFrame_SetStackPointer(frame, stack_pointer);
             TRACE_FUNCTION_EXIT();
             DTRACE_FUNCTION_EXIT();
@@ -3938,14 +3944,18 @@ handle_eval_breaker:
         TARGET(FOR_ITER_GENERATOR) {
             assert(cframe.cframe.use_tracing == 0);
             PyGenObject *gen = (PyGenObject *)TOP();
+            DEOPT_IF(tstate->interp->eval_frame, FOR_ITER);
             DEOPT_IF(Py_TYPE(gen) != &PyGen_Type, FOR_ITER);
-            DEOPT_IF(gen->gi_frame_state != FRAME_SUSPENDED, FOR_ITER);
+            DEOPT_IF(gen->gi_frame_state >= FRAME_EXECUTING, FOR_ITER);
             STAT_INC(FOR_ITER, hit);
             gen->gi_frame_state = FRAME_EXECUTING;
+            gen->gi_exc_state.previous_item = tstate->exc_info;
+            tstate->exc_info = &gen->gi_exc_state;
             _PyInterpreterFrame *gen_frame = (_PyInterpreterFrame *)gen->gi_iframe;
             JUMPBY(INLINE_CACHE_ENTRIES_FOR_ITER);
             frame->prev_instr = next_instr - 1;
             frame->gen_return_offset = oparg;
+            _PyFrame_SetStackPointer(frame, stack_pointer);
             gen_frame->previous = frame;
             frame = cframe.cframe.current_frame = gen_frame;
             Py_INCREF(Py_None);
@@ -5253,6 +5263,11 @@ exit_unwind:
     _Py_LeaveRecursiveCallTstate(tstate);
     assert(frame != &cframe.pyframe);
     _PyInterpreterFrame *prev_frame = frame->previous;
+    if (frame->owner == FRAME_OWNED_BY_GENERATOR) {
+        PyGenObject *gen = _PyFrame_GetGenerator(frame);
+        tstate->exc_info = gen->gi_exc_state.previous_item;
+        gen->gi_exc_state.previous_item = NULL;
+    }
     _PyEvalFrameClearAndPop(tstate, frame);
     frame = cframe.cframe.current_frame = prev_frame;
     if (frame == &cframe.pyframe) {

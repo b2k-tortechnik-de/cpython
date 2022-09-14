@@ -219,11 +219,10 @@ gen_send_ex2(PyGenObject *gen, PyObject *arg, PyObject **presult,
     gen->gi_frame_state = FRAME_EXECUTING;
     EVAL_CALL_STAT_INC(EVAL_CALL_GENERATOR);
     result = _PyEval_EvalFrame(tstate, frame, exc);
-    if (gen->gi_frame_state == FRAME_EXECUTING) {
-        gen->gi_frame_state = FRAME_COMPLETED;
-    }
-    tstate->exc_info = gen->gi_exc_state.previous_item;
-    gen->gi_exc_state.previous_item = NULL;
+    assert(gen->gi_frame_state == FRAME_SUSPENDED ||
+           gen->gi_frame_state == FRAME_CLEARED ||
+           (result == NULL));
+    assert(gen->gi_exc_state.previous_item == NULL);
 
     /* Don't keep the reference to previous any longer than necessary.  It
      * may keep a chain of frames alive or it could create a reference
