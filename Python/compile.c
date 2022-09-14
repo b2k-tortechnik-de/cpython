@@ -1086,8 +1086,7 @@ stack_effect(int opcode, int oparg, int jump)
         case UNPACK_EX:
             return (oparg&0xFF) + (oparg>>8);
         case FOR_ITER:
-            /* -1 at end of iterator, 1 if continue iterating. */
-            return jump > 0 ? 0 : 1;
+            return 1;
         case SEND:
             return jump > 0 ? -1 : 0;
         case STORE_ATTR:
@@ -3089,6 +3088,7 @@ compiler_for(struct compiler *c, stmt_ty s)
     ADDOP_JUMP(c, JUMP, start);
 
     USE_LABEL(c, cleanup);
+    ADDOP(c, POP_TOP);
     ADDOP(c, POP_TOP);
 
     compiler_pop_fblock(c, FOR_LOOP, start);
@@ -5228,6 +5228,7 @@ compiler_sync_comprehension_generator(struct compiler *c,
         ADDOP_JUMP(c, JUMP, start);
 
         USE_LABEL(c, anchor);
+        ADDOP(c, POP_TOP);
         ADDOP(c, POP_TOP);
     }
 

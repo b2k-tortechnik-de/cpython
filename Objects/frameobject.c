@@ -367,7 +367,7 @@ mark_stacks(PyCodeObject *code_obj, int len)
                     break;
                 case FOR_ITER:
                 {
-                    int64_t target_stack = next_stack;
+                    int64_t target_stack = push_value(next_stack, Object);
                     stacks[i+1] = push_value(next_stack, Object);
                     j = get_arg(code, i) + 1 + INLINE_CACHE_ENTRIES_FOR_ITER + i;
                     assert(j < len);
