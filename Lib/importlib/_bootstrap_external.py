@@ -413,6 +413,7 @@ _code_type = type(_write_atomic.__code__)
 #     Python 3.12a1 3507 (Set lineno of module's RESUME to 0)
 #     Python 3.12a1 3508 (Add CLEANUP_THROW)
 #     Python 3.12a1 3509 (Conditional jumps only jump forward)
+#     Python 3.12a1 3510 (FOR_ITER leaves iterator on the stack)
 #     Python 3.12a1 3511 Add GEN_RETURN_VALUE
 
 #     Python 3.13 will start with 3550
