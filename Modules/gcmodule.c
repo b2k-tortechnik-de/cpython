@@ -2269,10 +2269,17 @@ _PyObject_GC_Link(PyObject *op)
         !gcstate->collecting &&
         !_PyErr_Occurred(tstate))
     {
-        gcstate->collecting = 1;
-        gc_collect_generations(tstate);
-        gcstate->collecting = 0;
+        _Py_Request_GC(tstate->interp);
     }
+}
+
+void
+_Py_RunGC(PyThreadState *tstate)
+{
+    GCState *gcstate = &tstate->interp->gc;
+    gcstate->collecting = 1;
+    gc_collect_generations(tstate);
+    gcstate->collecting = 0;
 }
 
 static PyObject *

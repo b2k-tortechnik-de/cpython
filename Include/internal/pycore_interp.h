@@ -49,6 +49,8 @@ struct _ceval_state {
     _Py_atomic_int eval_breaker;
     /* Request for dropping the GIL */
     _Py_atomic_int gil_drop_request;
+    /* Request to run GC */
+    _Py_atomic_int run_gc_request;
     struct _pending_calls pending;
 };
 
@@ -217,6 +219,17 @@ PyAPI_FUNC(PyInterpreterState*) _PyInterpreterState_LookUpID(int64_t);
 PyAPI_FUNC(int) _PyInterpreterState_IDInitref(PyInterpreterState *);
 PyAPI_FUNC(int) _PyInterpreterState_IDIncref(PyInterpreterState *);
 PyAPI_FUNC(void) _PyInterpreterState_IDDecref(PyInterpreterState *);
+
+static inline void
+_Py_Request_GC(PyInterpreterState *interp)
+{
+    struct _ceval_state *ceval2 = &interp->ceval;
+    _Py_atomic_store_relaxed(&ceval2->run_gc_request, 1);
+    _Py_atomic_store_relaxed(&ceval2->eval_breaker, 1);
+}
+
+extern void
+_Py_RunGC(PyThreadState *tstate);
 
 #ifdef __cplusplus
 }

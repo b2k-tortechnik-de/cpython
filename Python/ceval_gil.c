@@ -5,6 +5,7 @@
 #include "pycore_pyerrors.h"      // _PyErr_Fetch()
 #include "pycore_pylifecycle.h"   // _PyErr_Print()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
+#include "pycore_interp.h"        // _Py_RunGC()
 #include "pycore_pymem.h"         // _PyMem_IsPtrFreed()
 
 /*
@@ -938,6 +939,13 @@ _Py_HandlePending(PyThreadState *tstate)
 {
     _PyRuntimeState * const runtime = &_PyRuntime;
     struct _ceval_runtime_state *ceval = &runtime->ceval;
+    struct _ceval_state *ceval2 = &tstate->interp->ceval;
+
+    if (_Py_atomic_load_relaxed_int32(&ceval2->run_gc_request)) {
+        _Py_atomic_store_relaxed(&ceval2->run_gc_request, 0);
+        COMPUTE_EVAL_BREAKER(tstate->interp, ceval, ceval2);
+        _Py_RunGC(tstate);
+    }
 
     /* Pending signals */
     if (_Py_atomic_load_relaxed_int32(&ceval->signals_pending)) {
@@ -947,7 +955,6 @@ _Py_HandlePending(PyThreadState *tstate)
     }
 
     /* Pending calls */
-    struct _ceval_state *ceval2 = &tstate->interp->ceval;
     if (_Py_atomic_load_relaxed_int32(&ceval2->pending.calls_to_do)) {
         if (make_pending_calls(tstate->interp) != 0) {
             return -1;
