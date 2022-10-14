@@ -99,6 +99,14 @@ PyAPI_DATA(struct _PyTraceMalloc_Config) _Py_tracemalloc_config;
 void *_PyObject_VirtualAlloc(size_t size);
 void _PyObject_VirtualFree(void *, size_t size);
 
+/* This function returns the number of allocated memory blocks, regardless of size */
+PyAPI_FUNC(Py_ssize_t) _Py_GetAllocatedBlocks(void);
+
+/* Macros */
+#ifdef WITH_PYMALLOC
+// Export the symbol for the 3rd party guppy3 project
+PyAPI_FUNC(int) _PyObject_DebugMallocStats(FILE *out);
+#endif
 
 #if WITH_FREELISTS
 /* Free lists.
@@ -121,9 +129,13 @@ typedef struct _freelist {
 extern void *_PyFreeList_HalfFillAndAllocate(_PyFreeList *list);
 extern void _PyFreeList_FreeToFull(_PyFreeList *list, void *ptr);
 
+
 static inline void *
 _PyFreeList_Alloc(_PyFreeList *list) {
     if (list->ptr != NULL) {
+#ifdef Py_STATS
+        if (_py_stats) _py_stats->object_stats.from_freelist++;
+#endif
         void *result = list->ptr;
         list->ptr = *((void **)result);
         list->space++;
@@ -135,12 +147,23 @@ _PyFreeList_Alloc(_PyFreeList *list) {
 static inline void
 _PyFreeList_Free(_PyFreeList *list, void *ptr) {
     if (list->space) {
+#ifdef Py_STATS
+        if (_py_stats) _py_stats->object_stats.to_freelist++;
+#endif
         *((void **)ptr) = list->ptr;
         list->ptr = ptr;
         list->space--;
         return;
     }
     _PyFreeList_FreeToFull(list, ptr);
+}
+
+static inline void
+_PyFreeList_Init(_PyFreeList *list, int size, int capacity)
+{
+    list->ptr = NULL;
+    list->space = list->capacity = capacity;
+    list->size = size;
 }
 
 extern void _PyFreeList_Clear(_PyFreeList *list);
