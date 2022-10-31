@@ -1873,6 +1873,11 @@ handle_eval_breaker:
                 goto resume_frame;
             }
             _Py_LeaveRecursiveCallTstate(tstate);
+            if (frame->owner == FRAME_OWNED_BY_GENERATOR) {
+                PyGenObject *gen = _PyFrame_GetGenerator(frame);
+                tstate->exc_info = gen->gi_exc_state.previous_item;
+                gen->gi_exc_state.previous_item = NULL;
+            }
             /* Restore previous cframe and return. */
             tstate->cframe = cframe.previous;
             tstate->cframe->use_tracing = cframe.use_tracing;
@@ -2077,10 +2082,14 @@ handle_eval_breaker:
             // or throw() call.
             assert(oparg == STACK_LEVEL());
             PyObject *retval = POP();
-            _PyFrame_GetGenerator(frame)->gi_frame_state = FRAME_SUSPENDED;
+            PyGenObject *gen = _PyFrame_GetGenerator(frame);
+            gen->gi_frame_state = FRAME_SUSPENDED;
             _PyFrame_SetStackPointer(frame, stack_pointer);
             TRACE_FUNCTION_EXIT();
             DTRACE_FUNCTION_EXIT();
+            tstate->exc_info = gen->gi_exc_state.previous_item;
+            gen->gi_exc_state.previous_item = NULL;
+
             _Py_LeaveRecursiveCallPy(tstate);
             if (!frame->is_entry) {
                 frame = cframe.current_frame = frame->previous;
@@ -3940,6 +3949,8 @@ handle_eval_breaker:
             Py_INCREF(Py_None);
             _PyFrame_StackPush(gen_frame, Py_None);
             gen->gi_frame_state = FRAME_EXECUTING;
+            gen->gi_exc_state.previous_item = tstate->exc_info;
+            tstate->exc_info = &gen->gi_exc_state;
             gen_frame->previous = frame;
             gen_frame->is_entry = false;
             frame = cframe.current_frame = gen_frame;
@@ -5249,6 +5260,11 @@ exit_unwind:
     assert(_PyErr_Occurred(tstate));
     _Py_LeaveRecursiveCallPy(tstate);
     if (frame->is_entry) {
+        if (frame->owner == FRAME_OWNED_BY_GENERATOR) {
+            PyGenObject *gen = _PyFrame_GetGenerator(frame);
+            tstate->exc_info = gen->gi_exc_state.previous_item;
+            gen->gi_exc_state.previous_item = NULL;
+        }
         /* Restore previous cframe and exit */
         tstate->cframe = cframe.previous;
         tstate->cframe->use_tracing = cframe.use_tracing;
@@ -5837,7 +5853,11 @@ static void
 clear_gen_frame(PyThreadState *tstate, _PyInterpreterFrame * frame)
 {
     assert(frame->owner == FRAME_OWNED_BY_GENERATOR);
-    _PyFrame_GetGenerator(frame)->gi_frame_state = FRAME_CLEARED;
+    PyGenObject *gen = _PyFrame_GetGenerator(frame);
+    gen->gi_frame_state = FRAME_CLEARED;
+    assert(tstate->exc_info == &gen->gi_exc_state);
+    tstate->exc_info = gen->gi_exc_state.previous_item;
+    gen->gi_exc_state.previous_item = NULL;
     tstate->c_recursion_remaining--;
     assert(frame->frame_obj == NULL || frame->frame_obj->f_frame == frame);
     _PyFrame_Clear(frame);
