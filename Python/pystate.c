@@ -313,7 +313,6 @@ init_interpreter(PyInterpreterState *interp,
     _PyEval_InitState(&interp->ceval, pending_lock);
     _PyGC_InitState(&interp->gc);
     PyConfig_InitPythonConfig(&interp->config);
-    _PyType_InitCache(interp);
 
     interp->_initialized = 1;
 }

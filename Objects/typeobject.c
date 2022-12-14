@@ -26,24 +26,6 @@ class object "PyObject *" "&PyBaseObject_Type"
 
 #include "clinic/typeobject.c.h"
 
-/* Support type attribute lookup cache */
-
-/* The cache can keep references to the names alive for longer than
-   they normally would.  This is why the maximum size is limited to
-   MCACHE_MAX_ATTR_SIZE, since it might be a problem if very large
-   strings are used as attribute names. */
-#define MCACHE_MAX_ATTR_SIZE    100
-#define MCACHE_HASH(version, name_hash)                                 \
-        (((unsigned int)(version) ^ (unsigned int)(name_hash))          \
-         & ((1 << MCACHE_SIZE_EXP) - 1))
-
-#define MCACHE_HASH_METHOD(type, name)                                  \
-    MCACHE_HASH((type)->tp_version_tag, ((Py_ssize_t)(name)) >> 3)
-#define MCACHE_CACHEABLE_NAME(name)                             \
-        PyUnicode_CheckExact(name) &&                           \
-        PyUnicode_IS_READY(name) &&                             \
-        (PyUnicode_GET_LENGTH(name) <= MCACHE_MAX_ATTR_SIZE)
-
 #define next_version_tag (_PyRuntime.types.next_version_tag)
 
 typedef struct PySlot_Offset {
@@ -286,80 +268,9 @@ _PyType_GetTextSignatureFromInternalDoc(const char *name, const char *internal_d
 }
 
 
-static struct type_cache*
-get_type_cache(void)
-{
-    PyInterpreterState *interp = _PyInterpreterState_GET();
-    return &interp->types.type_cache;
-}
-
-
-static void
-type_cache_clear(struct type_cache *cache, PyObject *value)
-{
-    for (Py_ssize_t i = 0; i < (1 << MCACHE_SIZE_EXP); i++) {
-        struct type_cache_entry *entry = &cache->hashtable[i];
-        entry->version = 0;
-        Py_XSETREF(entry->name, _Py_XNewRef(value));
-        entry->value = NULL;
-    }
-}
-
-
-void
-_PyType_InitCache(PyInterpreterState *interp)
-{
-    struct type_cache *cache = &interp->types.type_cache;
-    for (Py_ssize_t i = 0; i < (1 << MCACHE_SIZE_EXP); i++) {
-        struct type_cache_entry *entry = &cache->hashtable[i];
-        assert(entry->name == NULL);
-
-        entry->version = 0;
-        // Set to None so _PyType_Lookup() can use Py_SETREF(),
-        // rather than using slower Py_XSETREF().
-        entry->name = Py_NewRef(Py_None);
-        entry->value = NULL;
-    }
-}
-
-
-static unsigned int
-_PyType_ClearCache(PyInterpreterState *interp)
-{
-    struct type_cache *cache = &interp->types.type_cache;
-#if MCACHE_STATS
-    size_t total = cache->hits + cache->collisions + cache->misses;
-    fprintf(stderr, "-- Method cache hits        = %zd (%d%%)\n",
-            cache->hits, (int) (100.0 * cache->hits / total));
-    fprintf(stderr, "-- Method cache true misses = %zd (%d%%)\n",
-            cache->misses, (int) (100.0 * cache->misses / total));
-    fprintf(stderr, "-- Method cache collisions  = %zd (%d%%)\n",
-            cache->collisions, (int) (100.0 * cache->collisions / total));
-    fprintf(stderr, "-- Method cache size        = %zd KiB\n",
-            sizeof(cache->hashtable) / 1024);
-#endif
-
-    // Set to None, rather than NULL, so _PyType_Lookup() can
-    // use Py_SETREF() rather than using slower Py_XSETREF().
-    type_cache_clear(cache, Py_None);
-
-    return next_version_tag - 1;
-}
-
-
-unsigned int
-PyType_ClearCache(void)
-{
-    PyInterpreterState *interp = _PyInterpreterState_GET();
-    return _PyType_ClearCache(interp);
-}
-
-
 void
 _PyTypes_Fini(PyInterpreterState *interp)
 {
-    struct type_cache *cache = &interp->types.type_cache;
-    type_cache_clear(cache, NULL);
 
     assert(interp->types.num_builtins_initialized == 0);
     // All the static builtin types should have been finalized already.
@@ -4155,21 +4066,10 @@ _PyType_Lookup(PyTypeObject *type, PyObject *name)
     PyObject *res;
     int error;
 
-    unsigned int h = MCACHE_HASH_METHOD(type, name);
-    struct type_cache *cache = get_type_cache();
-    struct type_cache_entry *entry = &cache->hashtable[h];
-    if (entry->version == type->tp_version_tag &&
-        entry->name == name) {
-#if MCACHE_STATS
-        cache->hits++;
-#endif
-        assert(_PyType_HasFeature(type, Py_TPFLAGS_VALID_VERSION_TAG));
-        return entry->value;
-    }
-
     /* We may end up clearing live exceptions below, so make sure it's ours. */
     assert(!PyErr_Occurred());
 
+    assign_version_tag(type);
     res = find_name_in_mro(type, name, &error);
     /* Only put NULL results into cache if there was no error. */
     if (error) {
@@ -4186,25 +4086,13 @@ _PyType_Lookup(PyTypeObject *type, PyObject *name)
         }
         return NULL;
     }
-
-    if (MCACHE_CACHEABLE_NAME(name) && assign_version_tag(type)) {
-        h = MCACHE_HASH_METHOD(type, name);
-        struct type_cache_entry *entry = &cache->hashtable[h];
-        entry->version = type->tp_version_tag;
-        entry->value = res;  /* borrowed */
-        assert(_PyASCIIObject_CAST(name)->hash != -1);
-#if MCACHE_STATS
-        if (entry->name != Py_None && entry->name != name) {
-            cache->collisions++;
-        }
-        else {
-            cache->misses++;
-        }
-#endif
-        assert(_PyType_HasFeature(type, Py_TPFLAGS_VALID_VERSION_TAG));
-        Py_SETREF(entry->name, Py_NewRef(name));
-    }
     return res;
+}
+
+/* Part of API, so neds to be retained */
+unsigned int PyType_ClearCache(void)
+{
+    return 0;
 }
 
 PyObject *
