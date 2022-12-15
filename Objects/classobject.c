@@ -185,7 +185,7 @@ method_getattro(PyObject *obj, PyObject *name)
             if (PyType_Ready(tp) < 0)
                 return NULL;
         }
-        descr = _PyType_Lookup(tp, name);
+        descr = _PyType_Lookup(tp, name, 12);
     }
 
     if (descr != NULL) {
@@ -399,7 +399,7 @@ instancemethod_getattro(PyObject *self, PyObject *name)
         if (PyType_Ready(tp) < 0)
             return NULL;
     }
-    descr = _PyType_Lookup(tp, name);
+    descr = _PyType_Lookup(tp, name, 23);
 
     if (descr != NULL) {
         descrgetfunc f = TP_DESCR_GET(Py_TYPE(descr));

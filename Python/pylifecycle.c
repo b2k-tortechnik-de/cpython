@@ -832,10 +832,10 @@ pycore_init_builtins(PyThreadState *tstate)
     PyObject *len = PyDict_GetItem(builtins_dict, &_Py_ID(len));
     assert(len);
     interp->callable_cache.len = len;
-    PyObject *list_append = _PyType_Lookup(&PyList_Type, &_Py_ID(append));
+    PyObject *list_append = _PyType_Lookup(&PyList_Type, &_Py_ID(append), 10);
     assert(list_append);
     interp->callable_cache.list_append = list_append;
-    PyObject *object__getattribute__ = _PyType_Lookup(&PyBaseObject_Type, &_Py_ID(__getattribute__));
+    PyObject *object__getattribute__ = _PyType_Lookup(&PyBaseObject_Type, &_Py_ID(__getattribute__), 11);
     assert(object__getattribute__);
     interp->callable_cache.object__getattribute__ = object__getattribute__;
     interp->interpreter_trampoline = _Py_MakeShimCode(&INTERPRETER_TRAMPOLINE_CODEDEF);

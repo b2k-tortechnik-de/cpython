@@ -192,6 +192,9 @@ print_object_stats(FILE *out, ObjectStats *stats)
     fprintf(out, "Object method cache collisions: %" PRIu64 "\n", stats->type_cache_collisions);
     fprintf(out, "Object method cache dunder hits: %" PRIu64 "\n", stats->type_cache_dunder_hits);
     fprintf(out, "Object method cache dunder misses: %" PRIu64 "\n", stats->type_cache_dunder_misses);
+    for (int i = 0; i < 30; i++) {
+        fprintf(out, "Object method cache lookup %d: %" PRIu64 "\n", i, stats->type_cache_lookup[i]);
+    }
 }
 
 static void
@@ -448,6 +451,7 @@ _PyCode_Quicken(PyCodeObject *code)
 #define SPEC_FAIL_UNPACK_SEQUENCE_ITERATOR 8
 #define SPEC_FAIL_UNPACK_SEQUENCE_SEQUENCE 9
 
+
 static int function_kind(PyCodeObject *code);
 static bool function_check_args(PyObject *o, int expected_argcount, int opcode);
 static uint32_t function_get_version(PyObject *o, int opcode);
@@ -534,11 +538,11 @@ analyze_descriptor(PyTypeObject *type, PyObject *name, PyObject **descr, int sto
             /* One or both of __getattribute__ or __getattr__ may have been
              overridden See typeobject.c for why these functions are special. */
             PyObject *getattribute = _PyType_Lookup(type,
-                &_Py_ID(__getattribute__));
+                &_Py_ID(__getattribute__), 1);
             PyInterpreterState *interp = _PyInterpreterState_GET();
             bool has_custom_getattribute = getattribute != NULL &&
                 getattribute != interp->callable_cache.object__getattribute__;
-            has_getattr = _PyType_Lookup(type, &_Py_ID(__getattr__)) != NULL;
+            has_getattr = _PyType_Lookup(type, &_Py_ID(__getattr__), 2) != NULL;
             if (has_custom_getattribute) {
                 if (getattro_slot == _Py_slot_tp_getattro &&
                     !has_getattr &&
@@ -564,7 +568,7 @@ analyze_descriptor(PyTypeObject *type, PyObject *name, PyObject **descr, int sto
             return GETSET_OVERRIDDEN;
         }
     }
-    PyObject *descriptor = _PyType_Lookup(type, name);
+    PyObject *descriptor = _PyType_Lookup(type, name, 3);
     *descr = descriptor;
     if (descriptor == NULL) {
         return ABSENT;
@@ -589,7 +593,7 @@ analyze_descriptor(PyTypeObject *type, PyObject *name, PyObject **descr, int sto
             return has_getattr ? GETSET_OVERRIDDEN : PROPERTY;
         }
         if (PyUnicode_CompareWithASCIIString(name, "__class__") == 0) {
-            if (descriptor == _PyType_Lookup(&PyBaseObject_Type, name)) {
+            if (descriptor == _PyType_Lookup(&PyBaseObject_Type, name, 4)) {
                 return DUNDER_CLASS;
             }
         }
@@ -954,7 +958,7 @@ specialize_class_load_attr(PyObject *owner, _Py_CODEUNIT *instr,
                              PyObject *name)
 {
     _PyLoadMethodCache *cache = (_PyLoadMethodCache *)(instr + 1);
-    if (!PyType_CheckExact(owner) || _PyType_Lookup(Py_TYPE(owner), name)) {
+    if (!PyType_CheckExact(owner) || _PyType_Lookup(Py_TYPE(owner), name, 5)) {
         SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_METACLASS_ATTRIBUTE);
         return -1;
     }
@@ -1285,7 +1289,7 @@ _Py_Specialize_BinarySubscr(
         goto success;
     }
     PyTypeObject *cls = Py_TYPE(container);
-    PyObject *descriptor = _PyType_Lookup(cls, &_Py_ID(__getitem__));
+    PyObject *descriptor = _PyType_Lookup(cls, &_Py_ID(__getitem__), 6);
     if (descriptor && Py_TYPE(descriptor) == &PyFunction_Type) {
         if (!(container_type->tp_flags & Py_TPFLAGS_HEAPTYPE)) {
             SPECIALIZATION_FAIL(BINARY_SUBSCR, SPEC_FAIL_SUBSCR_NOT_HEAP_TYPE);
@@ -1406,7 +1410,7 @@ _Py_Specialize_StoreSubscr(PyObject *container, PyObject *sub, _Py_CODEUNIT *ins
         }
         goto fail;
     }
-    PyObject *descriptor = _PyType_Lookup(container_type, &_Py_ID(__setitem__));
+    PyObject *descriptor = _PyType_Lookup(container_type, &_Py_ID(__setitem__), 26);
     if (descriptor && Py_TYPE(descriptor) == &PyFunction_Type) {
         PyFunctionObject *func = (PyFunctionObject *)descriptor;
         PyCodeObject *code = (PyCodeObject *)func->func_code;

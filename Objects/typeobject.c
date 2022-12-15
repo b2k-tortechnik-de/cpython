@@ -1749,7 +1749,7 @@ _PyObject_LookupSpecial(PyObject *self, PyObject *attr)
 {
     PyObject *res;
 
-    res = _PyType_Lookup(Py_TYPE(self), attr);
+    res = _PyType_Lookup(Py_TYPE(self), attr, 13);
     if (res != NULL) {
         descrgetfunc f;
         if ((f = Py_TYPE(res)->tp_descr_get) == NULL)
@@ -1772,7 +1772,7 @@ _PyObject_LookupSpecialId(PyObject *self, _Py_Identifier *attrid)
 static PyObject *
 lookup_maybe_method(PyObject *self, PyObject *attr, int *unbound)
 {
-    PyObject *res = _PyType_Lookup(Py_TYPE(self), attr);
+    PyObject *res = _PyType_Lookup(Py_TYPE(self), attr, 14);
     if (res == NULL) {
         return NULL;
     }
@@ -2450,7 +2450,7 @@ get_dict_descriptor(PyTypeObject *type)
 {
     PyObject *descr;
 
-    descr = _PyType_Lookup(type, &_Py_ID(__dict__));
+    descr = _PyType_Lookup(type, &_Py_ID(__dict__), 15);
     if (descr == NULL || !PyDescr_IsData(descr))
         return NULL;
 
@@ -4156,7 +4156,7 @@ is_dunder_name(PyObject *name)
 /* Internal API to look for a name through the MRO.
    This returns a borrowed reference, and doesn't set an exception! */
 PyObject *
-_PyType_Lookup(PyTypeObject *type, PyObject *name)
+_PyType_Lookup(PyTypeObject *type, PyObject *name, int why)
 {
     PyObject *res;
     int error;
@@ -4164,6 +4164,7 @@ _PyType_Lookup(PyTypeObject *type, PyObject *name)
     unsigned int h = MCACHE_HASH_METHOD(type, name);
     struct type_cache *cache = get_type_cache();
     struct type_cache_entry *entry = &cache->hashtable[h];
+    OBJECT_STAT_INC(type_cache_lookup[why]);
     if (entry->version == type->tp_version_tag &&
         entry->name == name) {
         assert(_PyType_HasFeature(type, Py_TPFLAGS_VALID_VERSION_TAG));
@@ -4214,7 +4215,7 @@ _PyType_LookupId(PyTypeObject *type, _Py_Identifier *name)
     oname = _PyUnicode_FromId(name);   /* borrowed */
     if (oname == NULL)
         return NULL;
-    return _PyType_Lookup(type, oname);
+    return _PyType_Lookup(type, oname, 16);
 }
 
 /* This is similar to PyObject_GenericGetAttr(),
@@ -4244,7 +4245,7 @@ type_getattro(PyTypeObject *type, PyObject *name)
     meta_get = NULL;
 
     /* Look for the attribute in the metatype */
-    meta_attribute = _PyType_Lookup(metatype, name);
+    meta_attribute = _PyType_Lookup(metatype, name, 24);
 
     if (meta_attribute != NULL) {
         Py_INCREF(meta_attribute);
@@ -4264,7 +4265,7 @@ type_getattro(PyTypeObject *type, PyObject *name)
 
     /* No data descriptor found on metatype. Look in tp_dict of this
      * type and its bases */
-    attribute = _PyType_Lookup(type, name);
+    attribute = _PyType_Lookup(type, name, 25);
     if (attribute != NULL) {
         /* Implement descriptor functionality, if any */
         Py_INCREF(attribute);
@@ -8201,7 +8202,7 @@ _Py_slot_tp_getattr_hook(PyObject *self, PyObject *name)
        __getattr__, even when the attribute is present. So we use
        _PyType_Lookup and create the method only when needed, with
        call_attribute. */
-    getattr = _PyType_Lookup(tp, &_Py_ID(__getattr__));
+    getattr = _PyType_Lookup(tp, &_Py_ID(__getattr__), 17);
     if (getattr == NULL) {
         /* No __getattr__ hook: use a simpler dispatcher */
         tp->tp_getattro = _Py_slot_tp_getattro;
@@ -8213,7 +8214,7 @@ _Py_slot_tp_getattr_hook(PyObject *self, PyObject *name)
        __getattr__, even when self has the default __getattribute__
        method. So we use _PyType_Lookup and create the method only when
        needed, with call_attribute. */
-    getattribute = _PyType_Lookup(tp, &_Py_ID(__getattribute__));
+    getattribute = _PyType_Lookup(tp, &_Py_ID(__getattribute__), 18);
     if (getattribute == NULL ||
         (Py_IS_TYPE(getattribute, &PyWrapperDescr_Type) &&
          ((PyWrapperDescrObject *)getattribute)->d_wrapped ==
@@ -8326,7 +8327,7 @@ slot_tp_descr_get(PyObject *self, PyObject *obj, PyObject *type)
     PyTypeObject *tp = Py_TYPE(self);
     PyObject *get;
 
-    get = _PyType_Lookup(tp, &_Py_ID(__get__));
+    get = _PyType_Lookup(tp, &_Py_ID(__get__), 19);
     if (get == NULL) {
         /* Avoid further slowdowns */
         if (tp->tp_descr_get == slot_tp_descr_get)

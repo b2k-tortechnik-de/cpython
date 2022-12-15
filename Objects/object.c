@@ -1143,7 +1143,7 @@ _PyObject_GetMethod(PyObject *obj, PyObject *name, PyObject **method)
         return 0;
     }
 
-    PyObject *descr = _PyType_Lookup(tp, name);
+    PyObject *descr = _PyType_Lookup(tp, name, 20);
     descrgetfunc f = NULL;
     if (descr != NULL) {
         Py_INCREF(descr);
@@ -1255,7 +1255,7 @@ _PyObject_GenericGetAttrWithDict(PyObject *obj, PyObject *name,
             goto done;
     }
 
-    descr = _PyType_Lookup(tp, name);
+    descr = _PyType_Lookup(tp, name, 21);
 
     f = NULL;
     if (descr != NULL) {
@@ -1377,7 +1377,7 @@ _PyObject_GenericSetAttrWithDict(PyObject *obj, PyObject *name,
 
     Py_INCREF(name);
     Py_INCREF(tp);
-    descr = _PyType_Lookup(tp, name);
+    descr = _PyType_Lookup(tp, name, 22);
 
     if (descr != NULL) {
         Py_INCREF(descr);

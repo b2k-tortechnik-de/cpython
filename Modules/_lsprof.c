@@ -170,7 +170,7 @@ normalizeUserObj(PyObject *obj)
         PyObject *modname = fn->m_module;
 
         if (name != NULL) {
-            PyObject *mo = _PyType_Lookup(Py_TYPE(self), name);
+            PyObject *mo = _PyType_Lookup(Py_TYPE(self), name, 7);
             Py_XINCREF(mo);
             Py_DECREF(name);
             if (mo != NULL) {
