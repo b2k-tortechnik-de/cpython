@@ -173,6 +173,7 @@ print_object_stats(FILE *out, ObjectStats *stats)
 {
     fprintf(out, "Object allocations from freelist: %" PRIu64 "\n", stats->from_freelist);
     fprintf(out, "Object frees to freelist: %" PRIu64 "\n", stats->to_freelist);
+    fprintf(out, "Object small ints: %" PRIu64 "\n", stats->small_ints);
     fprintf(out, "Object allocations: %" PRIu64 "\n", stats->allocations);
     fprintf(out, "Object allocations to 512 bytes: %" PRIu64 "\n", stats->allocations512);
     fprintf(out, "Object allocations to 4 kbytes: %" PRIu64 "\n", stats->allocations4k);

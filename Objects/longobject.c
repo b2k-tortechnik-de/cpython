@@ -160,6 +160,7 @@ _PyLong_New(Py_ssize_t size)
        sizeof(PyVarObject) instead of the offsetof, but this risks being
        incorrect in the presence of padding between the PyVarObject header
        and the digits. */
+    OBJECT_STAT_INC_COND(small_ints, ndigits == 1);
     result = PyObject_Malloc(offsetof(PyLongObject, ob_digit) +
                              ndigits*sizeof(digit));
     if (!result) {
@@ -202,6 +203,7 @@ _PyLong_FromMedium(sdigit x)
     assert(!IS_SMALL_INT(x));
     assert(is_medium_int(x));
     /* We could use a freelist here */
+    OBJECT_STAT_INC(small_ints);
     PyLongObject *v = PyObject_Malloc(sizeof(PyLongObject));
     if (v == NULL) {
         PyErr_NoMemory();
