@@ -198,6 +198,24 @@ list_to_tuple(PyThreadState* unused, PyObject *v)
     return _PyTuple_FromArray(((PyListObject *)v)->ob_item, Py_SIZE(v));
 }
 
+static PyObject *
+to_str(PyThreadState* unused, PyObject *v)
+{
+    return PyObject_Str(v);
+}
+
+static PyObject *
+to_repr(PyThreadState* unused, PyObject *v)
+{
+    return PyObject_Repr(v);
+}
+
+static PyObject *
+to_ascii(PyThreadState* unused, PyObject *v)
+{
+    return PyObject_ASCII(v);
+}
+
 instrinsic_func1
 _PyIntrinsics_UnaryFunctions[] = {
     [0] = no_intrinsic,
@@ -207,4 +225,8 @@ _PyIntrinsics_UnaryFunctions[] = {
     [INTRINSIC_ASYNC_GEN_WRAP] = _PyAsyncGenValueWrapperNew,
     [INTRINSIC_UNARY_POSITIVE] = unary_pos,
     [INTRINSIC_LIST_TO_TUPLE] = list_to_tuple,
+    [INTRINSIC_FORMAT_STR] = to_str,
+    [INTRINSIC_FORMAT_REPR] = to_repr,
+    [INTRINSIC_FORMAT_ASCII] = to_ascii
 };
+

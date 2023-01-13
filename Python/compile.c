@@ -1286,10 +1286,10 @@ stack_effect(int opcode, int oparg, int jump)
             return -2;
         case CLEANUP_THROW:
             return -2;
-        case FORMAT_VALUE:
-            /* If there's a fmt_spec on the stack, we go from 2->1,
-               else 1->1. */
-            return (oparg & FVS_MASK) == FVS_HAVE_SPEC ? -1 : 0;
+        case FORMAT_SIMPLE:
+            return 0;
+        case FORMAT_WITH_SPEC:
+            return -1;
         case LOAD_METHOD:
             return 1;
         case LOAD_ASSERTION_ERROR:
@@ -4920,19 +4920,6 @@ compiler_joined_str(struct compiler *c, expr_ty e)
 static int
 compiler_formatted_value(struct compiler *c, expr_ty e)
 {
-    /* Our oparg encodes 2 pieces of information: the conversion
-       character, and whether or not a format_spec was provided.
-
-       Convert the conversion char to 3 bits:
-           : 000  0x0  FVC_NONE   The default if nothing specified.
-       !s  : 001  0x1  FVC_STR
-       !r  : 010  0x2  FVC_REPR
-       !a  : 011  0x3  FVC_ASCII
-
-       next bit is whether or not we have a format spec:
-       yes : 100  0x4
-       no  : 000  0x0
-    */
 
     int conversion = e->v.FormattedValue.conversion;
     int oparg;
@@ -4941,25 +4928,27 @@ compiler_formatted_value(struct compiler *c, expr_ty e)
     VISIT(c, expr, e->v.FormattedValue.value);
 
     switch (conversion) {
-    case 's': oparg = FVC_STR;   break;
-    case 'r': oparg = FVC_REPR;  break;
-    case 'a': oparg = FVC_ASCII; break;
-    case -1:  oparg = FVC_NONE;  break;
+    case 's': oparg = INTRINSIC_FORMAT_STR;   break;
+    case 'r': oparg = INTRINSIC_FORMAT_REPR;  break;
+    case 'a': oparg = INTRINSIC_FORMAT_ASCII; break;
+    case -1:  oparg = -1;  break;
     default:
         PyErr_Format(PyExc_SystemError,
                      "Unrecognized conversion character %d", conversion);
         return ERROR;
     }
+    location loc = LOC(e);
+    if (oparg > 0) {
+        ADDOP_I(c, loc, CALL_INTRINSIC_1, oparg);
+    }
     if (e->v.FormattedValue.format_spec) {
         /* Evaluate the format spec, and update our opcode arg. */
         VISIT(c, expr, e->v.FormattedValue.format_spec);
-        oparg |= FVS_HAVE_SPEC;
+        ADDOP(c, loc, FORMAT_WITH_SPEC);
     }
-
-    /* And push our opcode and oparg */
-    location loc = LOC(e);
-    ADDOP_I(c, loc, FORMAT_VALUE, oparg);
-
+    else {
+        ADDOP(c, loc, FORMAT_SIMPLE);
+    }
     return SUCCESS;
 }
 
