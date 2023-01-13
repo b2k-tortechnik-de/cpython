@@ -1,0 +1,4 @@
+Simplify and speed up interpreter for f-strings. Removes
+:opcode:`FORMAT_VALUE` opcode. Add :opcode:`FORMAT_SIMPLE` and
+:opcode:`FORMAT_WITH_SPEC` opcode. Compiler emits more efficient sequence
+for each format expression.
