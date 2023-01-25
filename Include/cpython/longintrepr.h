@@ -5,7 +5,6 @@
 extern "C" {
 #endif
 
-
 /* This is published for the benefit of "friends" marshal.c and _decimal.c. */
 
 /* Parameters of the integer representation.  There are two different

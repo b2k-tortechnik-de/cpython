@@ -170,30 +170,38 @@ _PyLong_New(Py_ssize_t size)
     return result;
 }
 
+PyLongObject *
+_PyLong_FromDigits(bool negative, Py_ssize_t digit_count, digit *digits)
+{
+    assert(digit_count >= 0);
+    PyLongObject *result = _PyLong_New(digit_count);
+    if (result == NULL) {
+        PyErr_NoMemory();
+        return NULL;
+    }
+    result->long_value.ob_size = negative ? -digit_count : digit_count;
+    memcpy(result->long_value.ob_digit, digits, digit_count * sizeof(digit));
+    return result;
+}
+
 PyObject *
 _PyLong_Copy(PyLongObject *src)
 {
-    PyLongObject *result;
     Py_ssize_t i;
 
     assert(src != NULL);
     i = Py_SIZE(src);
-    if (i < 0)
-        i = -(i);
+    bool negative = i < 0;
+    if (negative) {
+        i = -i;
+    }
     if (i < 2) {
         stwodigits ival = medium_value(src);
         if (IS_SMALL_INT(ival)) {
             return get_small_int((sdigit)ival);
         }
     }
-    result = _PyLong_New(i);
-    if (result != NULL) {
-        Py_SET_SIZE(result, Py_SIZE(src));
-        while (--i >= 0) {
-            result->long_value.ob_digit[i] = src->long_value.ob_digit[i];
-        }
-    }
-    return (PyObject *)result;
+    return (PyObject *)_PyLong_FromDigits(negative, i, src->long_value.ob_digit);
 }
 
 static PyObject *
