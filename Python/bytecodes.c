@@ -62,6 +62,10 @@ static size_t jump;
 static uint16_t invert, counter, index, hint;
 static uint32_t type_version;
 
+// These shouldn't be enecessary, but we can tolerate them in the short term.
+#define _BINARY_OP_ADD_FLOAT_CHECK 1003
+#define _BINARY_OP_ADD_FLOAT_ACTION 1004
+
 static PyObject *
 dummy_func(
     PyThreadState *tstate,
@@ -271,7 +275,14 @@ dummy_func(
             JUMPBY(INLINE_CACHE_ENTRIES_BINARY_OP + 1);
         }
 
-        inst(BINARY_OP_ADD_FLOAT, (unused/1, left, right -- sum)) {
+        op(_BINARY_OP_ADD_FLOAT_CHECK, (left, right -- left, right)) {
+            assert(cframe.use_tracing == 0);
+            DEOPT_IF(!PyFloat_CheckExact(left), BINARY_OP);
+            DEOPT_IF(Py_TYPE(right) != Py_TYPE(left), BINARY_OP);
+            STAT_INC(BINARY_OP, hit);
+        }
+
+        op(_BINARY_OP_ADD_FLOAT_ACTION, (unused/1, left, right -- sum)) {
             assert(cframe.use_tracing == 0);
             DEOPT_IF(!PyFloat_CheckExact(left), BINARY_OP);
             DEOPT_IF(Py_TYPE(right) != Py_TYPE(left), BINARY_OP);
@@ -283,6 +294,8 @@ dummy_func(
             _Py_DECREF_SPECIALIZED(left, _PyFloat_ExactDealloc);
             ERROR_IF(sum == NULL, error);
         }
+
+        inst(BINARY_OP_ADD_FLOAT) = _BINARY_OP_ADD_FLOAT_CHECK + _BINARY_OP_ADD_FLOAT_ACTION;
 
         inst(BINARY_OP_ADD_INT, (unused/1, left, right -- sum)) {
             assert(cframe.use_tracing == 0);
