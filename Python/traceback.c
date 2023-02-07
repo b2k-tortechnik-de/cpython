@@ -242,17 +242,16 @@ _PyTraceBack_FromFrame(PyObject *tb_next, PyFrameObject *frame)
 int
 PyTraceBack_Here(PyFrameObject *frame)
 {
-    PyObject *exc, *val, *tb, *newtb;
-    PyErr_Fetch(&exc, &val, &tb);
-    newtb = _PyTraceBack_FromFrame(tb, frame);
+    PyObject *exc = PyErr_GetRaisedException();
+    PyObject *tb = ((PyBaseExceptionObject *)exc)->traceback;
+    PyObject *newtb = _PyTraceBack_FromFrame(tb, frame);
     if (newtb == NULL) {
-        _PyErr_ChainExceptions(exc, val, tb);
+        _PyErr_ChainExceptions1(exc);
         return -1;
     }
-    assert(PyExceptionInstance_Check(val));
-    PyException_SetTraceback(val, newtb);
-    PyErr_Restore(exc, val, newtb);
-    Py_XDECREF(tb);
+    PyException_SetTraceback(exc, newtb);
+    PyErr_SetRaisedException(exc);
+    Py_XDECREF(newtb);
     return 0;
 }
 
