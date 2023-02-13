@@ -24,8 +24,8 @@ extern "C" {
     char prefix##_hooks_inited;                                             \
     char prefix##_closed;                                                   \
     char prefix##_running_async;                                            \
-    /* The frame */                                                         \
     int8_t prefix##_frame_state;                                            \
+    /* The frame */                                                         \
     union {                                                                 \
         Py_DEPRECATED(3.12) PyCodeObject *prefix##_code;                    \
         PyObject *prefix##_iframe[1];                                       \

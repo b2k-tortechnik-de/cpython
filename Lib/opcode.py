@@ -121,7 +121,6 @@ def_op('GET_YIELD_FROM_ITER', 69)
 def_op('LOAD_BUILD_CLASS', 71)
 
 def_op('LOAD_ASSERTION_ERROR', 74)
-def_op('RETURN_GENERATOR', 75)
 
 def_op('RETURN_VALUE', 83)
 
@@ -196,8 +195,8 @@ hasfree.append(139)
 jrel_op('JUMP_BACKWARD', 140)    # Number of words to skip (backwards)
 def_op('COMPARE_AND_BRANCH', 141)   # Comparison and jump
 hascompare.append(141)
-
 def_op('CALL_FUNCTION_EX', 142)  # Flags
+def_op('RETURN_GENERATOR', 143)  # Type of generator or coroutine
 
 def_op('EXTENDED_ARG', 144)
 EXTENDED_ARG = 144

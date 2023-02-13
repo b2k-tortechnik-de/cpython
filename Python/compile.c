@@ -8271,6 +8271,19 @@ build_cellfixedoffsets(struct compiler *c)
 }
 
 static int
+gen_index_from_flags(int code_flags)
+{
+    if (code_flags & CO_GENERATOR) {
+        return PY_GENERATOR_TYPE_INDEX;
+    }
+    if (code_flags & CO_COROUTINE) {
+        return PY_COROUTINE_TYPE_INDEX;
+    }
+    assert(code_flags & CO_ASYNC_GENERATOR);
+    return PY_ASYNC_GENERATOR_TYPE_INDEX;
+}
+
+static int
 insert_prefix_instructions(struct compiler *c, basicblock *entryblock,
                            int *fixed, int nfreevars, int code_flags)
 {
@@ -8280,7 +8293,7 @@ insert_prefix_instructions(struct compiler *c, basicblock *entryblock,
     if (code_flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR)) {
         struct instr make_gen = {
             .i_opcode = RETURN_GENERATOR,
-            .i_oparg = 0,
+            .i_oparg = gen_index_from_flags(code_flags),
             .i_loc = LOCATION(c->u->u_firstlineno, c->u->u_firstlineno, -1, -1),
             .i_target = NULL,
         };

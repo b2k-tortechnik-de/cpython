@@ -3758,22 +3758,23 @@
         }
 
         TARGET(RETURN_GENERATOR) {
+            assert(frame != &entry_frame);
+            assert(oparg < 3);
+            static PyTypeObject *gen_types[3] = {
+                [PY_GENERATOR_TYPE_INDEX] = &PyGen_Type,
+                [PY_COROUTINE_TYPE_INDEX] = &PyCoro_Type,
+                [PY_ASYNC_GENERATOR_TYPE_INDEX] = &PyAsyncGen_Type
+            };
             assert(PyFunction_Check(frame->f_funcobj));
-            PyFunctionObject *func = (PyFunctionObject *)frame->f_funcobj;
-            PyGenObject *gen = (PyGenObject *)_Py_MakeCoro(func);
+            assert(EMPTY());
+            _PyFrame_SetStackPointer(frame, stack_pointer);
+            _PyInterpreterFrame *prev = frame->previous;
+            /* If successful, this invalidates the current frame */
+            PyGenObject *gen = (PyGenObject *)_Py_MakeCoro(gen_types[oparg], frame);
             if (gen == NULL) {
                 goto error;
             }
-            assert(EMPTY());
-            _PyFrame_SetStackPointer(frame, stack_pointer);
-            _PyInterpreterFrame *gen_frame = (_PyInterpreterFrame *)gen->gi_iframe;
-            _PyFrame_Copy(frame, gen_frame);
-            assert(frame->frame_obj == NULL);
-            gen->gi_frame_state = FRAME_CREATED;
-            gen_frame->owner = FRAME_OWNED_BY_GENERATOR;
             _Py_LeaveRecursiveCallPy(tstate);
-            assert(frame != &entry_frame);
-            _PyInterpreterFrame *prev = frame->previous;
             _PyThreadState_PopFrame(tstate, frame);
             frame = cframe.current_frame = prev;
             _PyFrame_StackPush(frame, (PyObject *)gen);

@@ -467,7 +467,7 @@ async def _asyncwith(c):
     y = 2
 
 dis_asyncwith = """\
-%3d        RETURN_GENERATOR
+%3d        RETURN_GENERATOR         1
            POP_TOP
            RESUME                   0
 

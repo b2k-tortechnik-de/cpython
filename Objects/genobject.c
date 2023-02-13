@@ -897,16 +897,20 @@ PyTypeObject PyGen_Type = {
     _PyGen_Finalize,                            /* tp_finalize */
 };
 
+
 static PyObject *
-make_gen(PyTypeObject *type, PyFunctionObject *func)
+compute_cr_origin(int origin_depth, _PyInterpreterFrame *current_frame);
+
+PyObject *
+_Py_MakeCoro(PyTypeObject *type, _PyInterpreterFrame *frame)
 {
+    PyFunctionObject *func = (PyFunctionObject *)frame->f_funcobj;
     PyCodeObject *code = (PyCodeObject *)func->func_code;
     int slots = _PyFrame_NumSlotsForCodeObject(code);
     PyGenObject *gen = PyObject_GC_NewVar(PyGenObject, type, slots);
     if (gen == NULL) {
         return NULL;
     }
-    gen->gi_frame_state = FRAME_CLEARED;
     gen->gi_weakreflist = NULL;
     gen->gi_exc_state.exc_value = NULL;
     gen->gi_exc_state.previous_item = NULL;
@@ -914,57 +918,32 @@ make_gen(PyTypeObject *type, PyFunctionObject *func)
     gen->gi_name = Py_NewRef(func->func_name);
     assert(func->func_qualname != NULL);
     gen->gi_qualname = Py_NewRef(func->func_qualname);
+    gen->gi_origin_or_finalizer = NULL;
+    gen->gi_closed = 0;
+    gen->gi_hooks_inited = 0;
+    gen->gi_running_async = 0;
+    gen->gi_frame_state = FRAME_CREATED;
     _PyObject_GC_TRACK(gen);
+    if (type == &PyCoro_Type) {
+        PyThreadState *tstate = _PyThreadState_GET();
+        int origin_depth = tstate->coroutine_origin_tracking_depth;
+        if (origin_depth) {
+            assert(frame);
+            assert(_PyFrame_IsIncomplete(frame));
+            _PyInterpreterFrame *origin_frame = _PyFrame_GetFirstComplete(frame->previous);
+            PyObject *cr_origin = compute_cr_origin(origin_depth, origin_frame);
+            ((PyCoroObject *)gen)->cr_origin_or_finalizer = cr_origin;
+            if (!cr_origin) {
+                Py_DECREF(gen);
+                return NULL;
+            }
+        }
+    }
+    _PyInterpreterFrame *gen_frame = (_PyInterpreterFrame *)gen->gi_iframe;
+    _PyFrame_Copy(frame, gen_frame);
+    assert(frame->frame_obj == NULL);
+    gen_frame->owner = FRAME_OWNED_BY_GENERATOR;
     return (PyObject *)gen;
-}
-
-static PyObject *
-compute_cr_origin(int origin_depth, _PyInterpreterFrame *current_frame);
-
-PyObject *
-_Py_MakeCoro(PyFunctionObject *func)
-{
-    int coro_flags = ((PyCodeObject *)func->func_code)->co_flags &
-        (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR);
-    assert(coro_flags);
-    if (coro_flags == CO_GENERATOR) {
-        return make_gen(&PyGen_Type, func);
-    }
-    if (coro_flags == CO_ASYNC_GENERATOR) {
-        PyAsyncGenObject *o;
-        o = (PyAsyncGenObject *)make_gen(&PyAsyncGen_Type, func);
-        if (o == NULL) {
-            return NULL;
-        }
-        o->ag_origin_or_finalizer = NULL;
-        o->ag_closed = 0;
-        o->ag_hooks_inited = 0;
-        o->ag_running_async = 0;
-        return (PyObject*)o;
-    }
-    assert (coro_flags == CO_COROUTINE);
-    PyObject *coro = make_gen(&PyCoro_Type, func);
-    if (!coro) {
-        return NULL;
-    }
-    PyThreadState *tstate = _PyThreadState_GET();
-    int origin_depth = tstate->coroutine_origin_tracking_depth;
-
-    if (origin_depth == 0) {
-        ((PyCoroObject *)coro)->cr_origin_or_finalizer = NULL;
-    } else {
-        _PyInterpreterFrame *frame = tstate->cframe->current_frame;
-        assert(frame);
-        assert(_PyFrame_IsIncomplete(frame));
-        frame = _PyFrame_GetFirstComplete(frame->previous);
-        PyObject *cr_origin = compute_cr_origin(origin_depth, frame);
-        ((PyCoroObject *)coro)->cr_origin_or_finalizer = cr_origin;
-        if (!cr_origin) {
-            Py_DECREF(coro);
-            return NULL;
-        }
-    }
-    return coro;
 }
 
 static PyObject *

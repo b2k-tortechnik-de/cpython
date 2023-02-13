@@ -148,7 +148,7 @@ static inline void _Py_LeaveRecursiveCall(void)  {
 
 extern struct _PyInterpreterFrame* _PyEval_GetFrame(void);
 
-extern PyObject* _Py_MakeCoro(PyFunctionObject *func);
+extern PyObject* _Py_MakeCoro(PyTypeObject *coro_type, struct _PyInterpreterFrame *frame);
 
 extern int _Py_HandlePending(PyThreadState *tstate);
 

@@ -42,6 +42,10 @@ struct _Py_async_gen_state {
 #endif
 };
 
+/* Consts for selecting type of coroutine */
+#define PY_GENERATOR_TYPE_INDEX 0
+#define PY_COROUTINE_TYPE_INDEX 1
+#define PY_ASYNC_GENERATOR_TYPE_INDEX 2
 
 #ifdef __cplusplus
 }
