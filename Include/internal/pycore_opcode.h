@@ -51,7 +51,9 @@ const uint8_t _PyOpcode_Caches[256] = {
     [LOAD_GLOBAL] = 5,
     [BINARY_OP] = 1,
     [SEND] = 1,
+    [JUMP_BACKWARD] = 1,
     [COMPARE_AND_BRANCH] = 1,
+    [RESUME] = 1,
     [CALL] = 4,
 };
 
@@ -141,6 +143,7 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [INTERPRETER_EXIT] = INTERPRETER_EXIT,
     [IS_OP] = IS_OP,
     [JUMP_BACKWARD] = JUMP_BACKWARD,
+    [JUMP_BACKWARD_NO_COUNT] = JUMP_BACKWARD,
     [JUMP_BACKWARD_NO_INTERRUPT] = JUMP_BACKWARD_NO_INTERRUPT,
     [JUMP_FORWARD] = JUMP_FORWARD,
     [JUMP_IF_FALSE_OR_POP] = JUMP_IF_FALSE_OR_POP,
@@ -193,6 +196,7 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [RAISE_VARARGS] = RAISE_VARARGS,
     [RERAISE] = RERAISE,
     [RESUME] = RESUME,
+    [RESUME_NO_COUNT] = RESUME,
     [RETURN_CONST] = RETURN_CONST,
     [RETURN_GENERATOR] = RETURN_GENERATOR,
     [RETURN_VALUE] = RETURN_VALUE,
@@ -397,8 +401,8 @@ static const char *const _PyOpcode_OpName[263] = {
     [SET_UPDATE] = "SET_UPDATE",
     [DICT_MERGE] = "DICT_MERGE",
     [DICT_UPDATE] = "DICT_UPDATE",
-    [166] = "<166>",
-    [167] = "<167>",
+    [JUMP_BACKWARD_NO_COUNT] = "JUMP_BACKWARD_NO_COUNT",
+    [RESUME_NO_COUNT] = "RESUME_NO_COUNT",
     [168] = "<168>",
     [169] = "<169>",
     [170] = "<170>",
@@ -498,8 +502,6 @@ static const char *const _PyOpcode_OpName[263] = {
 #endif
 
 #define EXTRA_CASES \
-    case 166: \
-    case 167: \
     case 168: \
     case 169: \
     case 170: \

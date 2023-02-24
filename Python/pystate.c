@@ -808,6 +808,7 @@ interpreter_clear(PyInterpreterState *interp, PyThreadState *tstate)
     Py_CLEAR(interp->sysdict);
     Py_CLEAR(interp->builtins);
     Py_CLEAR(interp->interpreter_trampoline);
+    Py_CLEAR(interp->optimizer);
 
     for (int i=0; i < DICT_MAX_WATCHERS; i++) {
         interp->dict_state.watchers[i] = NULL;

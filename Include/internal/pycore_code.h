@@ -98,6 +98,8 @@ typedef struct {
 
 #define INLINE_CACHE_ENTRIES_SEND CACHE_ENTRIES(_PySendCache)
 
+#define INLINE_CACHE_ENTRIES_JUMP_BACKWARD 1
+
 // Borrowed references to common callables:
 struct callable_cache {
     PyObject *isinstance;

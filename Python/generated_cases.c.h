@@ -6,12 +6,39 @@
             DISPATCH();
         }
 
-        TARGET(RESUME) {
+        TARGET(RESUME_NO_COUNT) {
             assert(tstate->cframe == &cframe);
             assert(frame == cframe.current_frame);
             if (_Py_atomic_load_relaxed_int32(eval_breaker) && oparg < 2) {
+                JUMPBY(1);
                 goto handle_eval_breaker;
             }
+            JUMPBY(1);
+            DISPATCH();
+        }
+
+        TARGET(RESUME) {
+            static_assert(INLINE_CACHE_ENTRIES_JUMP_BACKWARD == 1, "incorrect cache size");
+            uint16_t *counter = &next_instr->cache;
+            if (ADAPTIVE_COUNTER_IS_ZERO(*counter)) {
+                if (tstate->interp->optimizer == NULL) {
+                    next_instr[-1].op.code = RESUME_NO_COUNT;
+                }
+                else {
+                    /* TO DO */
+                    assert(0);
+                }
+            }
+            else {
+                DECREMENT_ADAPTIVE_COUNTER(*counter);
+            }
+            assert(tstate->cframe == &cframe);
+            assert(frame == cframe.current_frame);
+            if (_Py_atomic_load_relaxed_int32(eval_breaker) && oparg < 2) {
+                JUMPBY(1);
+                goto handle_eval_breaker;
+            }
+            JUMPBY(1);
             DISPATCH();
         }
 
@@ -2390,10 +2417,33 @@
             DISPATCH();
         }
 
+        TARGET(JUMP_BACKWARD_NO_COUNT) {
+            assert(oparg <= INSTR_OFFSET());
+            JUMPBY(-oparg);
+            JUMPBY(1);
+            CHECK_EVAL_BREAKER();
+            DISPATCH();
+        }
+
         TARGET(JUMP_BACKWARD) {
             PREDICTED(JUMP_BACKWARD);
-            assert(oparg < INSTR_OFFSET());
+            static_assert(INLINE_CACHE_ENTRIES_JUMP_BACKWARD == 1, "incorrect cache size");
+            uint16_t *counter = &next_instr->cache;
+            if (ADAPTIVE_COUNTER_IS_ZERO(*counter)) {
+                if (tstate->interp->optimizer == NULL) {
+                    next_instr[-1].op.code = JUMP_BACKWARD_NO_COUNT;
+                }
+                else {
+                    /* TO DO */
+                    assert(0);
+                }
+            }
+            else {
+                DECREMENT_ADAPTIVE_COUNTER(*counter);
+            }
+            assert(oparg <= INSTR_OFFSET());
             JUMPBY(-oparg);
+            JUMPBY(1);
             CHECK_EVAL_BREAKER();
             DISPATCH();
         }

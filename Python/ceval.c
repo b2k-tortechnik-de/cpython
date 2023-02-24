@@ -866,8 +866,7 @@ handle_eval_breaker:
             int instr_prev = _PyInterpreterFrame_LASTI(frame);
             frame->prev_instr = next_instr;
             NEXTOPARG();
-            // No _PyOpcode_Deopt here, since RESUME has no optimized forms:
-            if (opcode == RESUME) {
+            if (opcode == RESUME || opcode == RESUME_NO_COUNT) {
                 if (oparg < 2) {
                     CHECK_EVAL_BREAKER();
                 }

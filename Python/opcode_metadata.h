@@ -10,6 +10,8 @@ _PyOpcode_num_popped(int opcode, int oparg, bool jump) {
     switch(opcode) {
         case NOP:
             return 0;
+        case RESUME_NO_COUNT:
+            return 0;
         case RESUME:
             return 0;
         case LOAD_CLOSURE:
@@ -236,6 +238,8 @@ _PyOpcode_num_popped(int opcode, int oparg, bool jump) {
             return 1;
         case JUMP_FORWARD:
             return 0;
+        case JUMP_BACKWARD_NO_COUNT:
+            return 0;
         case JUMP_BACKWARD:
             return 0;
         case POP_JUMP_IF_FALSE:
@@ -361,6 +365,8 @@ int
 _PyOpcode_num_pushed(int opcode, int oparg, bool jump) {
     switch(opcode) {
         case NOP:
+            return 0;
+        case RESUME_NO_COUNT:
             return 0;
         case RESUME:
             return 0;
@@ -588,6 +594,8 @@ _PyOpcode_num_pushed(int opcode, int oparg, bool jump) {
             return 2;
         case JUMP_FORWARD:
             return 0;
+        case JUMP_BACKWARD_NO_COUNT:
+            return 0;
         case JUMP_BACKWARD:
             return 0;
         case POP_JUMP_IF_FALSE:
@@ -721,7 +729,8 @@ extern const struct opcode_metadata _PyOpcode_opcode_metadata[256];
 #else
 const struct opcode_metadata _PyOpcode_opcode_metadata[256] = {
     [NOP] = { DIR_NONE, DIR_NONE, DIR_NONE, true, INSTR_FMT_IX },
-    [RESUME] = { DIR_NONE, DIR_NONE, DIR_NONE, true, INSTR_FMT_IB },
+    [RESUME_NO_COUNT] = { DIR_NONE, DIR_NONE, DIR_NONE, true, INSTR_FMT_IBC },
+    [RESUME] = { DIR_NONE, DIR_NONE, DIR_NONE, true, INSTR_FMT_IBC },
     [LOAD_CLOSURE] = { DIR_NONE, DIR_NONE, DIR_NONE, true, INSTR_FMT_IB },
     [LOAD_FAST_CHECK] = { DIR_NONE, DIR_NONE, DIR_NONE, true, INSTR_FMT_IB },
     [LOAD_FAST] = { DIR_NONE, DIR_NONE, DIR_NONE, true, INSTR_FMT_IB },
@@ -834,7 +843,8 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[256] = {
     [IMPORT_NAME] = { DIR_NONE, DIR_NONE, DIR_NONE, true, INSTR_FMT_IB },
     [IMPORT_FROM] = { DIR_NONE, DIR_NONE, DIR_NONE, true, INSTR_FMT_IB },
     [JUMP_FORWARD] = { DIR_NONE, DIR_NONE, DIR_NONE, true, INSTR_FMT_IB },
-    [JUMP_BACKWARD] = { DIR_NONE, DIR_NONE, DIR_NONE, true, INSTR_FMT_IB },
+    [JUMP_BACKWARD_NO_COUNT] = { DIR_NONE, DIR_NONE, DIR_NONE, true, INSTR_FMT_IBC },
+    [JUMP_BACKWARD] = { DIR_NONE, DIR_NONE, DIR_NONE, true, INSTR_FMT_IBC },
     [POP_JUMP_IF_FALSE] = { DIR_NONE, DIR_NONE, DIR_NONE, true, INSTR_FMT_IB },
     [POP_JUMP_IF_TRUE] = { DIR_NONE, DIR_NONE, DIR_NONE, true, INSTR_FMT_IB },
     [POP_JUMP_IF_NOT_NONE] = { DIR_NONE, DIR_NONE, DIR_NONE, true, INSTR_FMT_IB },

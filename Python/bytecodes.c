@@ -87,10 +87,38 @@ dummy_func(
         inst(NOP, (--)) {
         }
 
-        inst(RESUME, (--)) {
+        family(resume, INLINE_CACHE_ENTRIES_JUMP_BACKWARD) = {
+            RESUME,
+            RESUME_NO_COUNT,
+        };
+
+        inst(RESUME_NO_COUNT, (unused/1 --)) {
             assert(tstate->cframe == &cframe);
             assert(frame == cframe.current_frame);
             if (_Py_atomic_load_relaxed_int32(eval_breaker) && oparg < 2) {
+                JUMPBY(1);
+                goto handle_eval_breaker;
+            }
+        }
+
+        inst(RESUME, (unused/1 --)) {
+            uint16_t *counter = &next_instr->cache;
+            if (ADAPTIVE_COUNTER_IS_ZERO(*counter)) {
+                if (tstate->interp->optimizer == NULL) {
+                    next_instr[-1].op.code = RESUME_NO_COUNT;
+                }
+                else {
+                    /* TO DO */
+                    assert(0);
+                }
+            }
+            else {
+                DECREMENT_ADAPTIVE_COUNTER(*counter);
+            }
+            assert(tstate->cframe == &cframe);
+            assert(frame == cframe.current_frame);
+            if (_Py_atomic_load_relaxed_int32(eval_breaker) && oparg < 2) {
+                JUMPBY(1);
                 goto handle_eval_breaker;
             }
         }
@@ -1882,8 +1910,32 @@ dummy_func(
             JUMPBY(oparg);
         }
 
-        inst(JUMP_BACKWARD, (--)) {
-            assert(oparg < INSTR_OFFSET());
+        family(jump_backward, INLINE_CACHE_ENTRIES_JUMP_BACKWARD) = {
+            JUMP_BACKWARD,
+            JUMP_BACKWARD_NO_COUNT,
+        };
+
+        inst(JUMP_BACKWARD_NO_COUNT, (unused/1 --)) {
+            assert(oparg <= INSTR_OFFSET());
+            JUMPBY(-oparg);
+            CHECK_EVAL_BREAKER();
+        }
+
+        inst(JUMP_BACKWARD, (unused/1 --)) {
+            uint16_t *counter = &next_instr->cache;
+            if (ADAPTIVE_COUNTER_IS_ZERO(*counter)) {
+                if (tstate->interp->optimizer == NULL) {
+                    next_instr[-1].op.code = JUMP_BACKWARD_NO_COUNT;
+                }
+                else {
+                    /* TO DO */
+                    assert(0);
+                }
+            }
+            else {
+                DECREMENT_ADAPTIVE_COUNTER(*counter);
+            }
+            assert(oparg <= INSTR_OFFSET());
             JUMPBY(-oparg);
             CHECK_EVAL_BREAKER();
         }

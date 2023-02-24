@@ -49,6 +49,37 @@ struct _Py_long_state {
 };
 
 
+/* EXPERIMENTAL optimizer hooks
+ * This will go in its own header.
+ * It is just here for the experiment
+ */
+
+typedef struct _PyExecutorObject {
+    PyObject_HEAD
+    struct _PyInterpreterFrame *(*execute)(struct _PyExecutorObject *self, struct _PyInterpreterFrame *frame, PyObject **stack_pointer);
+    /* Data needed by the executor goes here, but is opaque to the VM */
+} PyExecutorObject;
+
+typedef enum {
+     function_entry = 1,
+     back_edges = 2,
+     anywhere = 4,
+     /* thread-safety? */
+} PyOptimizerCapabilities;
+
+typedef struct _PyOptimizerObject {
+    PyObject_HEAD
+    PyExecutorObject *(*compile)(struct _PyOptimizerObject* self, PyCodeObject *code, int offset);
+    PyOptimizerCapabilities capabilities;
+    float optimization_cost;
+    float run_cost;
+    /* Data needed by the compiler goes here, but is opaque to the VM */
+} PyOptimizerObject;
+
+void _Py_Executor_Replace(PyCodeObject *code, int offset, PyExecutorObject *executor);
+
+int _Py_Optimizer_Register(PyOptimizerObject* optimizer);
+
 /* interpreter state */
 
 /* PyInterpreterState holds the global state for one of the runtime's
@@ -135,6 +166,8 @@ struct _is {
     PyCode_WatchCallback code_watchers[CODE_MAX_WATCHERS];
     // One bit is set for each non-NULL entry in code_watchers
     uint8_t active_code_watchers;
+
+    PyOptimizerObject *optimizer;
 
     struct _Py_unicode_state unicode;
     struct _Py_float_state float_state;

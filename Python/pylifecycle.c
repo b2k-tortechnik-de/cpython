@@ -725,7 +725,8 @@ static const uint8_t INTERPRETER_TRAMPOLINE_INSTRUCTIONS[] = {
     NOP, 0,
     INTERPRETER_EXIT, 0,
     /* RESUME at end makes sure that the frame appears incomplete */
-    RESUME, 0
+    RESUME, 0,
+    CACHE, 0
 };
 
 static const _PyShimCodeDef INTERPRETER_TRAMPOLINE_CODEDEF = {
