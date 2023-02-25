@@ -2290,7 +2290,23 @@
             PyObject *right = PEEK(1);
             PyObject *left = PEEK(2);
             PyObject *b;
-            int res = Py_Is(left, right) ^ oparg;
+            int eq;
+            if (PyLong_CheckExact(left) && PyLong_CheckExact(right)) {
+                Py_ssize_t size = ((PyLongObject *)left)->long_value.ob_size;
+                if (left == right) {
+                    eq = 1;
+                }
+                else {
+                    eq = size >= -1 && size <= 1 &&
+                        ((PyLongObject *)right)->long_value.ob_size == size &&
+                        ((PyLongObject *)left)->long_value.ob_digit[0] ==
+                        ((PyLongObject *)right)->long_value.ob_digit[0];
+                }
+            }
+            else {
+                eq = left == right;
+            }
+            int res = eq ^ oparg;
             Py_DECREF(left);
             Py_DECREF(right);
             b = Py_NewRef(res ? Py_True : Py_False);

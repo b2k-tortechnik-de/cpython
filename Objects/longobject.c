@@ -42,6 +42,8 @@ medium_value(PyLongObject *x)
 /* If defined, use algorithms from the _pylong.py module */
 #define WITH_PYLONG_MODULE 1
 
+#define CHECK_VALID(v) assert(v->long_value.ob_size != 0 || v->long_value.ob_digit[0] == 0)
+
 static inline void
 _Py_DECREF_INT(PyLongObject *op)
 {
@@ -68,6 +70,7 @@ get_small_int(sdigit ival)
 static PyLongObject *
 maybe_small_long(PyLongObject *v)
 {
+    CHECK_VALID(v);
     if (v && IS_MEDIUM_VALUE(v)) {
         stwodigits ival = medium_value(v);
         if (IS_SMALL_INT(ival)) {
@@ -126,14 +129,22 @@ maybe_small_long(PyLongObject *v)
 static PyLongObject *
 long_normalize(PyLongObject *v)
 {
-    Py_ssize_t j = Py_ABS(Py_SIZE(v));
-    Py_ssize_t i = j;
+    Py_ssize_t signed_size = v->long_value.ob_size;
+    if (signed_size == 0) {
+        v->long_value.ob_digit[0] = 0;
+        CHECK_VALID(v);
+        return v;
+    }
+    int sign = (signed_size > 0) - (signed_size < 0);
+    Py_ssize_t unsigned_size = sign * signed_size;
+    Py_ssize_t i = unsigned_size;
 
     while (i > 0 && v->long_value.ob_digit[i-1] == 0)
         --i;
-    if (i != j) {
-        Py_SET_SIZE(v, (Py_SIZE(v) < 0) ? -(i) : i);
+    if (i != unsigned_size) {
+        v->long_value.ob_size = sign * i;
     }
+    CHECK_VALID(v);
     return v;
 }
 
@@ -162,6 +173,7 @@ _PyLong_New(Py_ssize_t size)
        and the digits. */
     result = PyObject_Malloc(offsetof(PyLongObject, long_value.ob_digit) +
                              ndigits*sizeof(digit));
+    result->long_value.ob_digit[0] = 0;
     if (!result) {
         PyErr_NoMemory();
         return NULL;
@@ -199,7 +211,6 @@ _PyLong_Copy(PyLongObject *src)
 static PyObject *
 _PyLong_FromMedium(sdigit x)
 {
-    assert(!IS_SMALL_INT(x));
     assert(is_medium_int(x));
     /* We could use a freelist here */
     PyLongObject *v = PyObject_Malloc(sizeof(PyLongObject));
@@ -207,8 +218,8 @@ _PyLong_FromMedium(sdigit x)
         PyErr_NoMemory();
         return NULL;
     }
-    Py_ssize_t sign = x < 0 ? -1: 1;
-    digit abs_x = x < 0 ? -x : x;
+    Py_ssize_t sign = (x > 0) - (x < 0);
+    digit abs_x = sign * x;
     _PyObject_InitVar((PyVarObject*)v, &PyLong_Type, sign);
     v->long_value.ob_digit[0] = abs_x;
     return (PyObject*)v;
@@ -257,13 +268,10 @@ _PyLong_FromLarge(stwodigits ival)
 static inline PyObject *
 _PyLong_FromSTwoDigits(stwodigits x)
 {
-    if (IS_SMALL_INT(x)) {
-        return get_small_int((sdigit)x);
-    }
-    assert(x != 0);
     if (is_medium_int(x)) {
         return _PyLong_FromMedium((sdigit)x);
     }
+    assert(x != 0);
     return _PyLong_FromLarge(x);
 }
 
