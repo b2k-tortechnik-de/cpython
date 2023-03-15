@@ -168,6 +168,9 @@ print_call_stats(FILE *out, CallStats *stats)
     for (int i = 0; i < EVAL_CALL_KINDS; i++) {
         fprintf(out, "Calls via PyEval_EvalFrame[%d] : %" PRIu64 "\n", i, stats->eval_calls[i]);
     }
+    for (int i = 0; i < PARSE_KINDS; i++) {
+        fprintf(out, "Argument Parsing[%d] : %" PRIu64 "\n", i, stats->parse_calls[i]);
+    }
 }
 
 static void

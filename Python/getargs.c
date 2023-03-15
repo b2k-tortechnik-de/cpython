@@ -2,6 +2,7 @@
 /* New getargs implementation */
 
 #include "Python.h"
+#include "pycore_code.h"         // Stats
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_pylifecycle.h"   // _PyArg_Fini
 
@@ -1424,6 +1425,7 @@ PyAPI_FUNC(int)
 _PyArg_ParseTupleAndKeywordsFast(PyObject *args, PyObject *keywords,
                             struct _PyArg_Parser *parser, ...)
 {
+    PARSE_CALL_STAT_INC(PARSE_TUPLE_AND_KEYWORD_FAST);
     int retval;
     va_list va;
 
@@ -1450,6 +1452,7 @@ PyAPI_FUNC(int)
 _PyArg_ParseStackAndKeywords(PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames,
                   struct _PyArg_Parser *parser, ...)
 {
+    PARSE_CALL_STAT_INC(PARSE_STACK_AND_KEYWORDS);
     int retval;
     va_list va;
 
@@ -1463,6 +1466,7 @@ PyAPI_FUNC(int)
 _PyArg_ParseStackAndKeywords_SizeT(PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames,
                         struct _PyArg_Parser *parser, ...)
 {
+    PARSE_CALL_STAT_INC(PARSE_STACK_AND_KEYWORDS);
     int retval;
     va_list va;
 
@@ -1477,6 +1481,7 @@ PyAPI_FUNC(int)
 _PyArg_VaParseTupleAndKeywordsFast(PyObject *args, PyObject *keywords,
                             struct _PyArg_Parser *parser, va_list va)
 {
+    PARSE_CALL_STAT_INC(PARSE_TUPLE_AND_KEYWORDS);
     int retval;
     va_list lva;
 
@@ -1491,6 +1496,7 @@ PyAPI_FUNC(int)
 _PyArg_VaParseTupleAndKeywordsFast_SizeT(PyObject *args, PyObject *keywords,
                             struct _PyArg_Parser *parser, va_list va)
 {
+    PARSE_CALL_STAT_INC(PARSE_TUPLE_AND_KEYWORDS);
     int retval;
     va_list lva;
 
@@ -2326,6 +2332,7 @@ _PyArg_UnpackKeywords(PyObject *const *args, Py_ssize_t nargs,
                       int minpos, int maxpos, int minkw,
                       PyObject **buf)
 {
+    PARSE_CALL_STAT_INC(PARSE_UNPACK_KEYWORDS);
     PyObject *kwtuple;
     PyObject *keyword;
     int i, posonly, minposonly, maxargs;
@@ -2501,6 +2508,7 @@ _PyArg_UnpackKeywordsWithVararg(PyObject *const *args, Py_ssize_t nargs,
                                 int minpos, int maxpos, int minkw,
                                 int vararg, PyObject **buf)
 {
+    PARSE_CALL_STAT_INC(PARSE_UNPACK_KEYWORDS);
     PyObject *kwtuple;
     PyObject *keyword;
     Py_ssize_t varargssize = 0;
@@ -2786,6 +2794,7 @@ int
 _PyArg_CheckPositional(const char *name, Py_ssize_t nargs,
                        Py_ssize_t min, Py_ssize_t max)
 {
+    PARSE_CALL_STAT_INC(PARSE_CHECK_POSITIONAL);
     assert(min >= 0);
     assert(min <= max);
 
@@ -2892,6 +2901,7 @@ _PyArg_UnpackStack(PyObject *const *args, Py_ssize_t nargs, const char *name,
 int
 _PyArg_NoKeywords(const char *funcname, PyObject *kwargs)
 {
+    PARSE_CALL_STAT_INC(PARSE_NO_KEYWORDS);
     if (kwargs == NULL) {
         return 1;
     }
@@ -2911,6 +2921,7 @@ _PyArg_NoKeywords(const char *funcname, PyObject *kwargs)
 int
 _PyArg_NoPositional(const char *funcname, PyObject *args)
 {
+    PARSE_CALL_STAT_INC(PARSE_NO_POSITIONAL);
     if (args == NULL)
         return 1;
     if (!PyTuple_CheckExact(args)) {
@@ -2928,6 +2939,7 @@ _PyArg_NoPositional(const char *funcname, PyObject *args)
 int
 _PyArg_NoKwnames(const char *funcname, PyObject *kwnames)
 {
+    PARSE_CALL_STAT_INC(PARSE_NO_KWNAMES);
     if (kwnames == NULL) {
         return 1;
     }

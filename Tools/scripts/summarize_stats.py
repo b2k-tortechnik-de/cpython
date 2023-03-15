@@ -427,10 +427,10 @@ def emit_comparative_specialization_overview(base_opcode_stats, base_total, head
             join_rows(base_rows, head_rows)
         )
 
-def get_stats_defines():
+def get_stats_defines(prefix="EVAL_CALL"):
     stats_path = os.path.join(os.path.dirname(__file__), "../../Include/pystats.h")
     with open(stats_path) as stats_src:
-        defines = parse_kinds(stats_src, prefix="EVAL_CALL")
+        defines = parse_kinds(stats_src, prefix)
     return defines
 
 def calculate_call_stats(stats):
@@ -451,6 +451,13 @@ def calculate_call_stats(stats):
     for key, value in stats.items():
         if key.startswith("Frame"):
             rows.append((key, value, format_ratio(value, total)))
+    parse_defines = get_stats_defines(prefix="PARSE")
+    for key, value in stats.items():
+        if key.startswith("Argument Parsing"):
+            name, index = key[:-1].split("[")
+            index =  int(index)
+            label = name + " (" + pretty(parse_defines[index][0]) + ")"
+            rows.append((label, value, format_ratio(value, total)))
     return rows
 
 def emit_call_stats(stats):

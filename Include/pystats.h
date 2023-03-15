@@ -24,6 +24,20 @@ extern "C" {
 
 #define EVAL_CALL_KINDS 10
 
+/* Stats for calls to various argument parsing functions */
+#define PARSE_TOTAL 0
+#define PARSE_TUPLE_AND_KEYWORD_FAST 1
+#define PARSE_NO_KEYWORDS 2
+#define PARSE_NO_POSITIONAL 3
+#define PARSE_NO_KWNAMES 4
+#define PARSE_CHECK_POSITIONAL 5
+#define PARSE_STACK_AND_KEYWORDS 6
+#define PARSE_TUPLE_AND_KEYWORDS 7
+#define PARSE_UNPACK_KEYWORDS 8
+#define PARSE_OTHER 9
+
+#define PARSE_KINDS 10
+
 typedef struct _specialization_stats {
     uint64_t success;
     uint64_t failure;
@@ -46,6 +60,7 @@ typedef struct _call_stats {
     uint64_t frames_pushed;
     uint64_t frame_objects_created;
     uint64_t eval_calls[EVAL_CALL_KINDS];
+    uint64_t parse_calls[PARSE_KINDS];
 } CallStats;
 
 typedef struct _object_stats {
