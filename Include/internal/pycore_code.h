@@ -273,7 +273,7 @@ PyAPI_FUNC(PyObject*) _Py_GetSpecializationStats(void);
 #define OBJECT_STAT_INC_COND(name, cond) ((void)0)
 #define EVAL_CALL_STAT_INC(name) ((void)0)
 #define EVAL_CALL_STAT_INC_IF_FUNCTION(name, callable) ((void)0)
-#define PARSE_CALL_STAT_INC(name) do { if (_py_stats) _py_stats->call_stats.parse_calls[name]++; } while (0)
+#define PARSE_CALL_STAT_INC(name) ((void)0)
 
 #endif  // !Py_STATS
 
