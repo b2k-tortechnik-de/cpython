@@ -480,7 +480,6 @@ OBJECT_OBJS=	\
 		Objects/weakrefobject.o \
 		@PERF_TRAMPOLINE_OBJ@
 
-DEEPFREEZE_OBJS = Python/deepfreeze/deepfreeze.o
 
 ##########################################################################
 # objects that get linked into the Python library
@@ -494,7 +493,6 @@ LIBRARY_OBJS_OMIT_FROZEN=	\
 
 LIBRARY_OBJS=	\
 		$(LIBRARY_OBJS_OMIT_FROZEN) \
-		$(DEEPFREEZE_OBJS) \
 		Modules/getpath.o \
 		Python/frozen.o
 

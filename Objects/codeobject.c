@@ -2423,3 +2423,5 @@ cleanup:
     Py_XDECREF(lines);
     return codeobj;
 }
+
+uint32_t _Py_next_func_version = 1;
