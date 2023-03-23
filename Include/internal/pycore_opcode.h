@@ -495,93 +495,269 @@ static const char *const _PyOpcode_OpName[263] = {
 
 #define EXTRA_CASES \
     case 159: \
+        oparg = 159; \
+        goto unknown_opcode_error; \
     case 160: \
+        oparg = 160; \
+        goto unknown_opcode_error; \
     case 161: \
+        oparg = 161; \
+        goto unknown_opcode_error; \
     case 166: \
+        oparg = 166; \
+        goto unknown_opcode_error; \
     case 167: \
+        oparg = 167; \
+        goto unknown_opcode_error; \
     case 168: \
+        oparg = 168; \
+        goto unknown_opcode_error; \
     case 169: \
+        oparg = 169; \
+        goto unknown_opcode_error; \
     case 170: \
+        oparg = 170; \
+        goto unknown_opcode_error; \
     case 175: \
+        oparg = 175; \
+        goto unknown_opcode_error; \
     case 176: \
+        oparg = 176; \
+        goto unknown_opcode_error; \
     case 177: \
+        oparg = 177; \
+        goto unknown_opcode_error; \
     case 178: \
+        oparg = 178; \
+        goto unknown_opcode_error; \
     case 179: \
+        oparg = 179; \
+        goto unknown_opcode_error; \
     case 180: \
+        oparg = 180; \
+        goto unknown_opcode_error; \
     case 181: \
+        oparg = 181; \
+        goto unknown_opcode_error; \
     case 182: \
+        oparg = 182; \
+        goto unknown_opcode_error; \
     case 183: \
+        oparg = 183; \
+        goto unknown_opcode_error; \
     case 184: \
+        oparg = 184; \
+        goto unknown_opcode_error; \
     case 185: \
+        oparg = 185; \
+        goto unknown_opcode_error; \
     case 186: \
+        oparg = 186; \
+        goto unknown_opcode_error; \
     case 187: \
+        oparg = 187; \
+        goto unknown_opcode_error; \
     case 188: \
+        oparg = 188; \
+        goto unknown_opcode_error; \
     case 189: \
+        oparg = 189; \
+        goto unknown_opcode_error; \
     case 190: \
+        oparg = 190; \
+        goto unknown_opcode_error; \
     case 191: \
+        oparg = 191; \
+        goto unknown_opcode_error; \
     case 192: \
+        oparg = 192; \
+        goto unknown_opcode_error; \
     case 193: \
+        oparg = 193; \
+        goto unknown_opcode_error; \
     case 194: \
+        oparg = 194; \
+        goto unknown_opcode_error; \
     case 195: \
+        oparg = 195; \
+        goto unknown_opcode_error; \
     case 196: \
+        oparg = 196; \
+        goto unknown_opcode_error; \
     case 197: \
+        oparg = 197; \
+        goto unknown_opcode_error; \
     case 198: \
+        oparg = 198; \
+        goto unknown_opcode_error; \
     case 199: \
+        oparg = 199; \
+        goto unknown_opcode_error; \
     case 200: \
+        oparg = 200; \
+        goto unknown_opcode_error; \
     case 201: \
+        oparg = 201; \
+        goto unknown_opcode_error; \
     case 202: \
+        oparg = 202; \
+        goto unknown_opcode_error; \
     case 203: \
+        oparg = 203; \
+        goto unknown_opcode_error; \
     case 204: \
+        oparg = 204; \
+        goto unknown_opcode_error; \
     case 205: \
+        oparg = 205; \
+        goto unknown_opcode_error; \
     case 206: \
+        oparg = 206; \
+        goto unknown_opcode_error; \
     case 207: \
+        oparg = 207; \
+        goto unknown_opcode_error; \
     case 208: \
+        oparg = 208; \
+        goto unknown_opcode_error; \
     case 209: \
+        oparg = 209; \
+        goto unknown_opcode_error; \
     case 210: \
+        oparg = 210; \
+        goto unknown_opcode_error; \
     case 211: \
+        oparg = 211; \
+        goto unknown_opcode_error; \
     case 212: \
+        oparg = 212; \
+        goto unknown_opcode_error; \
     case 213: \
+        oparg = 213; \
+        goto unknown_opcode_error; \
     case 214: \
+        oparg = 214; \
+        goto unknown_opcode_error; \
     case 215: \
+        oparg = 215; \
+        goto unknown_opcode_error; \
     case 216: \
+        oparg = 216; \
+        goto unknown_opcode_error; \
     case 217: \
+        oparg = 217; \
+        goto unknown_opcode_error; \
     case 218: \
+        oparg = 218; \
+        goto unknown_opcode_error; \
     case 219: \
+        oparg = 219; \
+        goto unknown_opcode_error; \
     case 220: \
+        oparg = 220; \
+        goto unknown_opcode_error; \
     case 221: \
+        oparg = 221; \
+        goto unknown_opcode_error; \
     case 222: \
+        oparg = 222; \
+        goto unknown_opcode_error; \
     case 223: \
+        oparg = 223; \
+        goto unknown_opcode_error; \
     case 224: \
+        oparg = 224; \
+        goto unknown_opcode_error; \
     case 225: \
+        oparg = 225; \
+        goto unknown_opcode_error; \
     case 226: \
+        oparg = 226; \
+        goto unknown_opcode_error; \
     case 227: \
+        oparg = 227; \
+        goto unknown_opcode_error; \
     case 228: \
+        oparg = 228; \
+        goto unknown_opcode_error; \
     case 229: \
+        oparg = 229; \
+        goto unknown_opcode_error; \
     case 230: \
+        oparg = 230; \
+        goto unknown_opcode_error; \
     case 231: \
+        oparg = 231; \
+        goto unknown_opcode_error; \
     case 232: \
+        oparg = 232; \
+        goto unknown_opcode_error; \
     case 233: \
+        oparg = 233; \
+        goto unknown_opcode_error; \
     case 234: \
+        oparg = 234; \
+        goto unknown_opcode_error; \
     case 235: \
+        oparg = 235; \
+        goto unknown_opcode_error; \
     case 236: \
+        oparg = 236; \
+        goto unknown_opcode_error; \
     case 237: \
+        oparg = 237; \
+        goto unknown_opcode_error; \
     case 238: \
+        oparg = 238; \
+        goto unknown_opcode_error; \
     case 239: \
+        oparg = 239; \
+        goto unknown_opcode_error; \
     case 240: \
+        oparg = 240; \
+        goto unknown_opcode_error; \
     case 241: \
+        oparg = 241; \
+        goto unknown_opcode_error; \
     case 242: \
+        oparg = 242; \
+        goto unknown_opcode_error; \
     case 243: \
+        oparg = 243; \
+        goto unknown_opcode_error; \
     case 244: \
+        oparg = 244; \
+        goto unknown_opcode_error; \
     case 245: \
+        oparg = 245; \
+        goto unknown_opcode_error; \
     case 246: \
+        oparg = 246; \
+        goto unknown_opcode_error; \
     case 247: \
+        oparg = 247; \
+        goto unknown_opcode_error; \
     case 248: \
+        oparg = 248; \
+        goto unknown_opcode_error; \
     case 249: \
+        oparg = 249; \
+        goto unknown_opcode_error; \
     case 250: \
+        oparg = 250; \
+        goto unknown_opcode_error; \
     case 251: \
+        oparg = 251; \
+        goto unknown_opcode_error; \
     case 252: \
+        oparg = 252; \
+        goto unknown_opcode_error; \
     case 253: \
+        oparg = 253; \
+        goto unknown_opcode_error; \
     case 254: \
+        oparg = 254; \
+        goto unknown_opcode_error; \
         ;
 
 #ifdef __cplusplus

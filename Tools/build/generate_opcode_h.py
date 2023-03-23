@@ -191,6 +191,8 @@ def main(opcode_py, outfile='Include/opcode.h', internaloutfile='Include/interna
         for i, flag in enumerate(used):
             if not flag:
                 iobj.write(f"    case {i}: \\\n")
+                iobj.write(f"        oparg = {i}; \\\n")
+                iobj.write(f"        goto unknown_opcode_error; \\\n")
         iobj.write("        ;\n")
 
         fobj.write(footer)

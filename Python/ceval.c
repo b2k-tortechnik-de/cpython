@@ -932,17 +932,20 @@ handle_eval_breaker:
 
 #if USE_COMPUTED_GOTOS
         _unknown_opcode:
+            oparg = next_instr->op.code;
+            goto unknown_opcode_error;
 #else
         EXTRA_CASES  // From opcode.h, a 'case' for each unused opcode
 #endif
+
+unknown_opcode_error:
             /* Tell C compilers not to hold the opcode variable in the loop.
                next_instr points the current instruction without TARGET(). */
-            opcode = next_instr->op.code;
             _PyErr_Format(tstate, PyExc_SystemError,
                           "%U:%d: unknown opcode %d",
                           frame->f_code->co_filename,
                           _PyInterpreterFrame_GetLine(frame),
-                          opcode);
+                          oparg);
             goto error;
 
         } /* End instructions */
