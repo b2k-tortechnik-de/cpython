@@ -1141,9 +1141,9 @@ init_interp_main(PyThreadState *tstate)
 
 
 #ifdef PY_HAVE_PERF_TRAMPOLINE
-        if (config->perf_profiling) {
+        if (1) {
             if (_PyPerfTrampoline_SetCallbacks(&_Py_perfmap_callbacks) < 0 ||
-                    _PyPerfTrampoline_Init(config->perf_profiling) < 0) {
+                    _PyPerfTrampoline_Init(1) < 0) {
                 return _PyStatus_ERR("can't initialize the perf trampoline");
             }
         }
