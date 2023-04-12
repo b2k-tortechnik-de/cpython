@@ -2831,6 +2831,7 @@ class TestSetLocalTrace(TraceTestCase):
 
         def tracefunc(frame, event, arg):
             if frame.f_code.co_name == "func":
+                frame.f_trace = None
                 frame.f_trace = tracefunc
                 line = frame.f_lineno - frame.f_code.co_firstlineno
                 events.append((line, event))

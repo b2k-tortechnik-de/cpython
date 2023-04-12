@@ -4,6 +4,7 @@
 
 #include <stddef.h>
 #include "Python.h"
+#include "opcode.h"
 #include "pycore_ceval.h"
 #include "pycore_object.h"
 #include "pycore_sysmodule.h"
@@ -213,7 +214,6 @@ trace_line(
     if (line < 0) {
         Py_RETURN_NONE;
     }
-    frame ->f_last_traced_line = line;
     Py_INCREF(frame);
     frame->f_lineno = line;
     int err = tstate->c_tracefunc(tstate->c_traceobj, frame, self->event, Py_None);
@@ -245,11 +245,44 @@ sys_trace_line_func(
         return NULL;
     }
     assert(args[0] == (PyObject *)frame->f_frame->f_code);
-    if (frame ->f_last_traced_line == line) {
-        /* Already traced this line */
+    if (frame->skip_next_line_trace) {
+        frame->skip_next_line_trace = 0;
         Py_RETURN_NONE;
     }
     return trace_line(tstate, self, frame, line);
+}
+
+static PyObject *
+trace_jump(_PyLegacyEventHandler *self, PyFrameObject *frame,
+           int from_offset, int to_offset)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    if (tstate->c_tracefunc == NULL) {
+        Py_RETURN_NONE;
+    }
+    if (!frame->f_trace_lines) {
+        Py_RETURN_NONE;
+    }
+    PyCodeObject *code = frame->f_frame->f_code;
+    /* We can call _Py_Instrumentation_GetLine because we always set
+    * line events for tracing */
+    int to_line = _Py_Instrumentation_GetLine(code, to_offset);
+    if (to_line < 0) {
+        assert(_PyCode_CODE(code)[to_offset].op.code != INSTRUMENTED_LINE);
+        Py_RETURN_NONE;
+    }
+    if (_PyCode_CODE(code)[to_offset].op.code == INSTRUMENTED_LINE) {
+        frame->skip_next_line_trace = 1;
+    }
+    if (to_offset < from_offset) {
+        // Backward jump
+        return trace_line(tstate, self, frame, to_line);
+    }
+    int from_line = _Py_Instrumentation_GetLine(code, from_offset);
+    if (to_line != from_line) {
+        return trace_line(tstate, self, frame, to_line);
+    }
+    Py_RETURN_NONE;
 }
 
 
@@ -259,10 +292,6 @@ sys_trace_jump_func(
     size_t nargsf, PyObject *kwnames
 ) {
     assert(kwnames == NULL);
-    PyThreadState *tstate = _PyThreadState_GET();
-    if (tstate->c_tracefunc == NULL) {
-        Py_RETURN_NONE;
-    }
     assert(PyVectorcall_NARGS(nargsf) == 3);
     int from = _PyLong_AsInt(args[1])/sizeof(_Py_CODEUNIT);
     assert(from >= 0);
@@ -274,22 +303,9 @@ sys_trace_jump_func(
                         "Missing frame when calling trace function.");
         return NULL;
     }
-    if (!frame->f_trace_lines) {
-        Py_RETURN_NONE;
-    }
-    PyCodeObject *code = (PyCodeObject *)args[0];
-    assert(PyCode_Check(code));
-    assert(code == frame->f_frame->f_code);
-    /* We can call _Py_Instrumentation_GetLine because we always set
-    * line events for tracing */
-    int to_line = _Py_Instrumentation_GetLine(code, to);
-    /* Backward jump: Always generate event
-     * Forward jump: Only generate event if jumping to different line. */
-    if (to > from && frame->f_last_traced_line == to_line) {
-        /* Already traced this line */
-        Py_RETURN_NONE;
-    }
-    return trace_line(tstate, self, frame, to_line);
+    assert(PyCode_Check(args[0]));
+    assert((PyCodeObject *)args[0] == frame->f_frame->f_code);
+    return trace_jump(self, frame, from, to);
 }
 
 /* We don't care about the exception here,
@@ -301,27 +317,19 @@ sys_trace_exception_handled(
     size_t nargsf, PyObject *kwnames
 ) {
     assert(kwnames == NULL);
-    PyThreadState *tstate = _PyThreadState_GET();
-    if (tstate->c_tracefunc == NULL) {
-        Py_RETURN_NONE;
-    }
     assert(PyVectorcall_NARGS(nargsf) == 3);
     PyFrameObject *frame = PyEval_GetFrame();
-    PyCodeObject *code = (PyCodeObject *)args[0];
-    assert(PyCode_Check(code));
-    assert(code == frame->f_frame->f_code);
-    assert(PyLong_Check(args[1]));
-    int offset = _PyLong_AsInt(args[1])/sizeof(_Py_CODEUNIT);
-    /* We can call _Py_Instrumentation_GetLine because we always set
-    * line events for tracing */
-    int line = _Py_Instrumentation_GetLine(code, offset);
-    if (frame->f_last_traced_line == line) {
-        /* Already traced this line */
-        Py_RETURN_NONE;
+    if (frame == NULL) {
+        PyErr_SetString(PyExc_SystemError,
+                        "Missing frame when calling trace function.");
+        return NULL;
     }
-    return trace_line(tstate, self, frame, line);
+    assert(PyCode_Check(args[0]));
+    assert((PyCodeObject *)args[0] == frame->f_frame->f_code);
+    int offset = _PyLong_AsInt(args[1])/sizeof(_Py_CODEUNIT);
+    int lasti = _PyInterpreterFrame_LASTI(frame->f_frame);
+    return trace_jump(self, frame, lasti, offset);
 }
-
 
 PyTypeObject _PyLegacyEventHandler_Type = {
     _PyVarObject_IMMORTAL_INIT(&PyType_Type, 0),
