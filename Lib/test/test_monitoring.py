@@ -1036,9 +1036,22 @@ class BranchRecorder(JumpRecorder):
     event_type = E.BRANCH
     name = "branch"
 
+class ExceptionHandledRecorder:
+
+    event_type = E.EXCEPTION_HANDLED
+    name = "handled"
+
+    def __init__(self, events):
+        self.events = events
+
+    def __call__(self, code, offset, exc):
+        line = line_from_offset(offset)
+        self.events.append((self.name, code.co_name, line, type(exc).__name__))
+
 
 JUMP_AND_BRANCH_RECORDERS = JumpRecorder, BranchRecorder
 JUMP_BRANCH_AND_LINE_RECORDERS = JumpRecorder, BranchRecorder, LineRecorder
+MANY_RECORDERS = JumpRecorder, BranchRecorder, LineRecorder, ExceptionHandledRecorder
 
 class TestBranchAndJumpEvents(CheckEvents):
     maxDiff = None
@@ -1080,6 +1093,25 @@ class TestBranchAndJumpEvents(CheckEvents):
             ('branch', 'func', 2, 2),
             ('line', 'func', 2),
             ('line', 'check_events', 11)])
+
+
+        #self.check_events(func, recorders = MANY_RECORDERS, expected = [
+            #('line', 'check_events', 10),
+            #('line', 'func', 1),
+            #('line', 'func', 2),
+            #('branch', 'func', 2, 2),
+            #('line', 'func', 3),
+            #('branch', 'func', 3, 6),
+            #('line', 'func', 6),
+            #('jump', 'func', 6, 2),
+            #('branch', 'func', 2, 2),
+            #('line', 'func', 3),
+            #('branch', 'func', 3, 4),
+            #('line', 'func', 4),
+            #('jump', 'func', 4, 2),
+            #('branch', 'func', 2, 2),
+            #('line', 'func', 2),
+            #('line', 'check_events', 11)])
 
 
 class TestSetGetEvents(MonitoringTestBase, unittest.TestCase):

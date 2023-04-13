@@ -982,6 +982,7 @@ _Py_call_instrumentation_arg(
     PyThreadState *tstate, int event,
     _PyInterpreterFrame *frame, _Py_CODEUNIT *instr, PyObject *arg)
 {
+    assert(!PyErr_Occurred());
     PyObject *args[4] = { NULL, NULL, NULL, arg };
     return call_instrumentation_vector(tstate, event, frame, instr, 3, args);
 }
@@ -991,6 +992,7 @@ _Py_call_instrumentation_2args(
     PyThreadState *tstate, int event,
     _PyInterpreterFrame *frame, _Py_CODEUNIT *instr, PyObject *arg0, PyObject *arg1)
 {
+    assert(!PyErr_Occurred());
     PyObject *args[5] = { NULL, NULL, NULL, arg0, arg1 };
     return call_instrumentation_vector(tstate, event, frame, instr, 4, args);
 }
@@ -1071,6 +1073,7 @@ _Py_Instrumentation_GetLine(PyCodeObject *code, int index)
 int
 _Py_call_instrumentation_line(PyThreadState *tstate, _PyInterpreterFrame* frame, _Py_CODEUNIT *instr)
 {
+    assert(!PyErr_Occurred());
     frame->prev_instr = instr;
     PyCodeObject *code = frame->f_code;
     assert(is_version_up_to_date(code, tstate->interp));
