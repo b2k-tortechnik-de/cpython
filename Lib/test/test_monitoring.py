@@ -1014,8 +1014,11 @@ class TestLocalEvents(MonitoringTestBase, unittest.TestCase):
 def line_from_offset(code, offset):
     for start, end, line in code.co_lines():
         if start <= offset < end:
+            if line is None:
+                return None
             return line - code.co_firstlineno
-    return -1
+    return "missing"
+
 
 class JumpRecorder:
 
