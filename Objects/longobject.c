@@ -22,8 +22,6 @@ class int "PyObject *" "&PyLong_Type"
 [clinic start generated code]*/
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=ec0275e3422a36e3]*/
 
-#define medium_value(x) ((stwodigits)_PyLong_CompactValue(x))
-
 #define IS_SMALL_INT(ival) (-_PY_NSMALLNEGINTS <= (ival) && (ival) < _PY_NSMALLPOSINTS)
 #define IS_SMALL_UINT(ival) ((ival) < _PY_NSMALLPOSINTS)
 
@@ -40,12 +38,38 @@ _Py_DECREF_INT(PyLongObject *op)
     _Py_DECREF_SPECIALIZED((PyObject *)op, (destructor)PyObject_Free);
 }
 
-static inline int
-is_medium_int(stwodigits x)
+static _PyLongValue*
+_PyLongValue_FromCompact(intptr_t val, _PyLongValue3 *tmp)
 {
-    /* Take care that we are comparing unsigned values. */
-    twodigits x_plus_mask = ((twodigits)x) + PyLong_MASK;
-    return x_plus_mask < ((twodigits)PyLong_MASK) + PyLong_BASE;
+    if (val == 0) {
+        tmp->v.lv_tag = TAG_FROM_SIGN_AND_SIZE(0, 0);
+        return &tmp->v;
+    }
+    int sign;
+    if (val < 0) {
+        val = -val;
+        sign = -1;
+    }
+    else {
+        sign = 1;
+    }
+    int digits = 0;
+    do {
+        tmp->v.ob_digit[digits] = val & PyLong_MASK;
+        val >>= PyLong_SHIFT;
+        digits++;
+    } while (val);
+    tmp->v.lv_tag = TAG_FROM_SIGN_AND_SIZE(sign, digits);
+    return &tmp->v;
+}
+
+static inline _PyLongValue*
+_PyLongValue_FromPyLong(PyLongObject *op, _PyLongValue3 *tmp)
+{
+    if (_PyLong_IsCompact(op)) {
+        return _PyLongValue_FromCompact(_PyLong_CompactValue(op), tmp);
+    }
+    return &op->long_value;
 }
 
 static PyObject *
@@ -59,7 +83,7 @@ static PyLongObject *
 maybe_small_long(PyLongObject *v)
 {
     if (v && _PyLong_IsCompact(v)) {
-        stwodigits ival = medium_value(v);
+        intptr_t ival = _PyLong_CompactValue(v);
         if (IS_SMALL_INT(ival)) {
             _Py_DECREF_INT(v);
             return (PyLongObject *)get_small_int((sdigit)ival);
@@ -190,7 +214,7 @@ _PyLong_Copy(PyLongObject *src)
     assert(src != NULL);
 
     if (_PyLong_IsCompact(src)) {
-        stwodigits ival = medium_value(src);
+        intptr_t ival = _PyLong_CompactValue(src);
         if (IS_SMALL_INT(ival)) {
             return get_small_int((sdigit)ival);
         }
@@ -203,7 +227,6 @@ static PyObject *
 _PyLong_FromMedium(sdigit x)
 {
     assert(!IS_SMALL_INT(x));
-    assert(is_medium_int(x));
     /* We could use a freelist here */
     PyLongObject *v = PyObject_Malloc(sizeof(PyLongObject));
     if (v == NULL) {
@@ -215,59 +238,6 @@ _PyLong_FromMedium(sdigit x)
     _PyObject_Init((PyObject*)v, &PyLong_Type);
     v->long_value.ob_digit[0] = abs_x;
     return (PyObject*)v;
-}
-
-static PyObject *
-_PyLong_FromLarge(stwodigits ival)
-{
-    twodigits abs_ival;
-    int sign;
-    assert(!is_medium_int(ival));
-
-    if (ival < 0) {
-        /* negate: can't write this as abs_ival = -ival since that
-           invokes undefined behaviour when ival is LONG_MIN */
-        abs_ival = 0U-(twodigits)ival;
-        sign = -1;
-    }
-    else {
-        abs_ival = (twodigits)ival;
-        sign = 1;
-    }
-    /* Must be at least two digits */
-    assert(abs_ival >> PyLong_SHIFT != 0);
-    twodigits t = abs_ival >> (PyLong_SHIFT * 2);
-    Py_ssize_t ndigits = 2;
-    while (t) {
-        ++ndigits;
-        t >>= PyLong_SHIFT;
-    }
-    PyLongObject *v = _PyLong_New(ndigits);
-    if (v != NULL) {
-        digit *p = v->long_value.ob_digit;
-        _PyLong_SetSignAndDigitCount(v, sign, ndigits);
-        t = abs_ival;
-        while (t) {
-            *p++ = Py_SAFE_DOWNCAST(
-                t & PyLong_MASK, twodigits, digit);
-            t >>= PyLong_SHIFT;
-        }
-    }
-    return (PyObject *)v;
-}
-
-/* Create a new int object from a C word-sized int */
-static inline PyObject *
-_PyLong_FromSTwoDigits(stwodigits x)
-{
-    if (IS_SMALL_INT(x)) {
-        return get_small_int((sdigit)x);
-    }
-    assert(x != 0);
-    if (is_medium_int(x)) {
-        return _PyLong_FromMedium((sdigit)x);
-    }
-    return _PyLong_FromLarge(x);
 }
 
 /* If a freshly-allocated int is already shared, it must
@@ -283,7 +253,7 @@ _PyLong_Negate(PyLongObject **x_p)
         return;
     }
 
-    *x_p = (PyLongObject *)_PyLong_FromSTwoDigits(-medium_value(x));
+    *x_p = (PyLongObject *)PyLong_FromSsize_t(-_PyLong_CompactValue(x));
     Py_DECREF(x);
 }
 
@@ -779,6 +749,19 @@ bit_length_digit(digit x)
     return _Py_bit_length((unsigned long)x);
 }
 
+static int
+bit_count(uintptr_t val)
+{
+    int result = 0;
+#if SIZEOF_LONG < SIZEOF_VOID_P
+    while (val > ULONG_MAX) {
+        val >>= (SIZEOF_LONG *8);
+        result += (SIZEOF_LONG *8);
+    }
+#endif
+    return result + _Py_bit_length((unsigned long)val);
+}
+
 size_t
 _PyLong_NumBits(PyObject *vv)
 {
@@ -789,6 +772,13 @@ _PyLong_NumBits(PyObject *vv)
 
     assert(v != NULL);
     assert(PyLong_Check(v));
+    if (_PyLong_IsCompact(v)) {
+        intptr_t val = _PyLong_CompactValue(v);
+        if (val < 0) {
+            val = -val;
+        }
+        return bit_count(val);
+    }
     ndigits = _PyLong_DigitCount(v);
     assert(ndigits == 0 || v->long_value.ob_digit[ndigits - 1] != 0);
     if (ndigits > 0) {
@@ -925,7 +915,7 @@ _PyLong_FromByteArray(const unsigned char* bytes, size_t n,
 }
 
 int
-_PyLong_AsByteArray(PyLongObject* v,
+_PyLong_AsByteArray(PyLongObject* op,
                     unsigned char* bytes, size_t n,
                     int little_endian, int is_signed)
 {
@@ -939,10 +929,12 @@ _PyLong_AsByteArray(PyLongObject* v,
     unsigned char* p;           /* pointer to next byte in bytes */
     int pincr;                  /* direction to move p */
 
-    assert(v != NULL && PyLong_Check(v));
+    assert(op != NULL && PyLong_Check(op));
 
-    ndigits = _PyLong_DigitCount(v);
-    if (_PyLong_IsNegative(v)) {
+    _PyLongValue3 temp;
+    _PyLongValue *v = _PyLongValue_FromPyLong(op, &temp);
+    ndigits = _PyLongValue_DigitCount(v);
+    if (_PyLongValue_IsNegative(v)) {
         if (!is_signed) {
             PyErr_SetString(PyExc_OverflowError,
                             "can't convert negative int to unsigned");
@@ -967,13 +959,13 @@ _PyLong_AsByteArray(PyLongObject* v,
        It's crucial that every Python digit except for the MSD contribute
        exactly PyLong_SHIFT bits to the total, so first assert that the int is
        normalized. */
-    assert(ndigits == 0 || v->long_value.ob_digit[ndigits - 1] != 0);
+    assert(ndigits == 0 || v->ob_digit[ndigits - 1] != 0);
     j = 0;
     accum = 0;
     accumbits = 0;
     carry = do_twos_comp ? 1 : 0;
     for (i = 0; i < ndigits; ++i) {
-        digit thisdigit = v->long_value.ob_digit[i];
+        digit thisdigit = v->ob_digit[i];
         if (do_twos_comp) {
             thisdigit = (thisdigit ^ PyLong_MASK) + carry;
             carry = thisdigit >> PyLong_SHIFT;
@@ -1758,7 +1750,8 @@ long_to_decimal_string_internal(PyObject *aa,
                                 _PyBytesWriter *bytes_writer,
                                 char **bytes_str)
 {
-    PyLongObject *scratch, *a;
+    PyLongObject *scratch;
+    _PyLongValue *a;
     PyObject *str = NULL;
     Py_ssize_t size, strlen, size_a, i, j;
     digit *pout, *pin, rem, tenpow;
@@ -1766,14 +1759,14 @@ long_to_decimal_string_internal(PyObject *aa,
     int d;
     int kind;
 
-    a = (PyLongObject *)aa;
-    if (a == NULL || !PyLong_Check(a)) {
+    if (aa == NULL || !PyLong_Check(aa)) {
         PyErr_BadInternalCall();
         return -1;
     }
-    size_a = _PyLong_DigitCount(a);
-    negative = _PyLong_IsNegative(a);
-
+    _PyLongValue3 temp;
+    a = _PyLongValue_FromPyLong((PyLongObject *)aa, &temp);
+    size_a = _PyLongValue_DigitCount(a);
+    negative = _PyLongValue_IsNegative(a);
     /* quick and dirty pre-check for overflowing the decimal digit limit,
        based on the inequality 10/3 >= log2(10)
 
@@ -1827,7 +1820,7 @@ long_to_decimal_string_internal(PyObject *aa,
     /* convert array of base _PyLong_BASE digits in pin to an array of
        base _PyLong_DECIMAL_BASE digits in pout, following Knuth (TAOCP,
        Volume 2 (3rd edn), section 4.4, Method 1b). */
-    pin = a->long_value.ob_digit;
+    pin = a->ob_digit;
     pout = scratch->long_value.ob_digit;
     size = 0;
     for (i = size_a; --i >= 0; ) {
@@ -1956,7 +1949,7 @@ long_to_decimal_string_internal(PyObject *aa,
 #undef WRITE_DIGITS
 #undef WRITE_UNICODE_DIGITS
 
-    _Py_DECREF_INT(scratch);
+    Py_DECREF(scratch);
     if (writer) {
         writer->pos += strlen;
     }
@@ -3220,7 +3213,7 @@ PyLong_AsDouble(PyObject *v)
            to double.  This improves performance of FP/long operations
            by 20%.
         */
-        return (double)medium_value((PyLongObject *)v);
+        return (double)_PyLong_CompactValue((PyLongObject *)v);
     }
     x = _PyLong_Frexp((PyLongObject *)v, &exponent);
     if ((x == -1.0 && PyErr_Occurred()) || exponent > DBL_MAX_EXP) {
@@ -3279,7 +3272,7 @@ long_dealloc(PyObject *self)
      */
     PyLongObject *pylong = (PyLongObject*)self;
     if (pylong && _PyLong_IsCompact(pylong)) {
-        stwodigits ival = medium_value(pylong);
+        stwodigits ival = _PyLong_CompactValue(pylong);
         if (IS_SMALL_INT(ival)) {
             PyLongObject *small_pylong = (PyLongObject *)get_small_int((sdigit)ival);
             if (pylong == small_pylong) {
@@ -3350,16 +3343,16 @@ long_hash(PyLongObject *v)
 /* Add the absolute values of two integers. */
 
 static PyLongObject *
-x_add(PyLongObject *a, PyLongObject *b)
+x_add(_PyLongValue *a, _PyLongValue *b)
 {
-    Py_ssize_t size_a = _PyLong_DigitCount(a), size_b = _PyLong_DigitCount(b);
+    Py_ssize_t size_a = _PyLongValue_DigitCount(a), size_b = _PyLongValue_DigitCount(b);
     PyLongObject *z;
     Py_ssize_t i;
     digit carry = 0;
 
     /* Ensure a is the larger of the two: */
     if (size_a < size_b) {
-        { PyLongObject *temp = a; a = b; b = temp; }
+        { _PyLongValue *temp = a; a = b; b = temp; }
         { Py_ssize_t size_temp = size_a;
             size_a = size_b;
             size_b = size_temp; }
@@ -3368,12 +3361,12 @@ x_add(PyLongObject *a, PyLongObject *b)
     if (z == NULL)
         return NULL;
     for (i = 0; i < size_b; ++i) {
-        carry += a->long_value.ob_digit[i] + b->long_value.ob_digit[i];
+        carry += a->ob_digit[i] + b->ob_digit[i];
         z->long_value.ob_digit[i] = carry & PyLong_MASK;
         carry >>= PyLong_SHIFT;
     }
     for (; i < size_a; ++i) {
-        carry += a->long_value.ob_digit[i];
+        carry += a->ob_digit[i];
         z->long_value.ob_digit[i] = carry & PyLong_MASK;
         carry >>= PyLong_SHIFT;
     }
@@ -3384,9 +3377,9 @@ x_add(PyLongObject *a, PyLongObject *b)
 /* Subtract the absolute values of two integers. */
 
 static PyLongObject *
-x_sub(PyLongObject *a, PyLongObject *b)
+x_sub(_PyLongValue *a, _PyLongValue *b)
 {
-    Py_ssize_t size_a = _PyLong_DigitCount(a), size_b = _PyLong_DigitCount(b);
+    Py_ssize_t size_a = _PyLongValue_DigitCount(a), size_b = _PyLongValue_DigitCount(b);
     PyLongObject *z;
     Py_ssize_t i;
     int sign = 1;
@@ -3395,7 +3388,7 @@ x_sub(PyLongObject *a, PyLongObject *b)
     /* Ensure a is the larger of the two: */
     if (size_a < size_b) {
         sign = -1;
-        { PyLongObject *temp = a; a = b; b = temp; }
+        { _PyLongValue *temp = a; a = b; b = temp; }
         { Py_ssize_t size_temp = size_a;
             size_a = size_b;
             size_b = size_temp; }
@@ -3403,13 +3396,13 @@ x_sub(PyLongObject *a, PyLongObject *b)
     else if (size_a == size_b) {
         /* Find highest digit where a and b differ: */
         i = size_a;
-        while (--i >= 0 && a->long_value.ob_digit[i] == b->long_value.ob_digit[i])
+        while (--i >= 0 && a->ob_digit[i] == b->ob_digit[i])
             ;
         if (i < 0)
             return (PyLongObject *)PyLong_FromLong(0);
-        if (a->long_value.ob_digit[i] < b->long_value.ob_digit[i]) {
+        if (a->ob_digit[i] < b->ob_digit[i]) {
             sign = -1;
-            { PyLongObject *temp = a; a = b; b = temp; }
+            { _PyLongValue *temp = a; a = b; b = temp; }
         }
         size_a = size_b = i+1;
     }
@@ -3419,13 +3412,13 @@ x_sub(PyLongObject *a, PyLongObject *b)
     for (i = 0; i < size_b; ++i) {
         /* The following assumes unsigned arithmetic
            works module 2**N for some N>PyLong_SHIFT. */
-        borrow = a->long_value.ob_digit[i] - b->long_value.ob_digit[i] - borrow;
+        borrow = a->ob_digit[i] - b->ob_digit[i] - borrow;
         z->long_value.ob_digit[i] = borrow & PyLong_MASK;
         borrow >>= PyLong_SHIFT;
         borrow &= 1; /* Keep only one sign bit */
     }
     for (; i < size_a; ++i) {
-        borrow = a->long_value.ob_digit[i] - borrow;
+        borrow = a->ob_digit[i] - borrow;
         z->long_value.ob_digit[i] = borrow & PyLong_MASK;
         borrow >>= PyLong_SHIFT;
         borrow &= 1; /* Keep only one sign bit */
@@ -3441,13 +3434,15 @@ PyObject *
 _PyLong_Add(PyLongObject *a, PyLongObject *b)
 {
     if (_PyLong_BothAreCompact(a, b)) {
-        return _PyLong_FromSTwoDigits(medium_value(a) + medium_value(b));
+        return PyLong_FromSsize_t(_PyLong_CompactValue(a) + _PyLong_CompactValue(b));
     }
-
+    _PyLongValue3 tmp_a, tmp_b;
+    _PyLongValue *val_a = _PyLongValue_FromPyLong(a, &tmp_a);
+    _PyLongValue *val_b = _PyLongValue_FromPyLong(b, &tmp_b);
     PyLongObject *z;
-    if (_PyLong_IsNegative(a)) {
-        if (_PyLong_IsNegative(b)) {
-            z = x_add(a, b);
+    if (_PyLongValue_IsNegative(val_a)) {
+        if (_PyLongValue_IsNegative(val_b)) {
+            z = x_add(val_a, val_b);
             if (z != NULL) {
                 /* x_add received at least one multiple-digit int,
                    and thus z must be a multiple-digit int.
@@ -3458,13 +3453,13 @@ _PyLong_Add(PyLongObject *a, PyLongObject *b)
             }
         }
         else
-            z = x_sub(b, a);
+            z = x_sub(val_b, val_a);
     }
     else {
-        if (_PyLong_IsNegative(b))
-            z = x_sub(a, b);
+        if (_PyLongValue_IsNegative(val_b))
+            z = x_sub(val_a, val_b);
         else
-            z = x_add(a, b);
+            z = x_add(val_a, val_b);
     }
     return (PyObject *)z;
 }
@@ -3482,14 +3477,17 @@ _PyLong_Subtract(PyLongObject *a, PyLongObject *b)
     PyLongObject *z;
 
     if (_PyLong_BothAreCompact(a, b)) {
-        return _PyLong_FromSTwoDigits(medium_value(a) - medium_value(b));
+        return PyLong_FromSsize_t(_PyLong_CompactValue(a) - _PyLong_CompactValue(b));
     }
-    if (_PyLong_IsNegative(a)) {
-        if (_PyLong_IsNegative(b)) {
-            z = x_sub(b, a);
+    _PyLongValue3 tmp_a, tmp_b;
+    _PyLongValue *val_a = _PyLongValue_FromPyLong(a, &tmp_a);
+    _PyLongValue *val_b = _PyLongValue_FromPyLong(b, &tmp_b);
+    if (_PyLongValue_IsNegative(val_a)) {
+        if (_PyLongValue_IsNegative(val_b)) {
+            z = x_sub(val_b, val_a);
         }
         else {
-            z = x_add(a, b);
+            z = x_add(val_a, val_b);
             if (z != NULL) {
                 assert(_PyLong_IsZero(z) || Py_REFCNT(z) == 1);
                 _PyLong_FlipSign(z);
@@ -3497,10 +3495,10 @@ _PyLong_Subtract(PyLongObject *a, PyLongObject *b)
         }
     }
     else {
-        if (_PyLong_IsNegative(b))
-            z = x_add(a, b);
+        if (_PyLongValue_IsNegative(val_b))
+            z = x_add(val_a, val_b);
         else
-            z = x_sub(a, b);
+            z = x_sub(val_a, val_b);
     }
     return (PyObject *)z;
 }
@@ -3516,11 +3514,11 @@ long_sub(PyLongObject *a, PyLongObject *b)
  * Returns the absolute value of the product, or NULL if error.
  */
 static PyLongObject *
-x_mul(PyLongObject *a, PyLongObject *b)
+x_mul(_PyLongValue *a, _PyLongValue *b)
 {
     PyLongObject *z;
-    Py_ssize_t size_a = _PyLong_DigitCount(a);
-    Py_ssize_t size_b = _PyLong_DigitCount(b);
+    Py_ssize_t size_a = _PyLongValue_DigitCount(a);
+    Py_ssize_t size_b = _PyLongValue_DigitCount(b);
     Py_ssize_t i;
 
     z = _PyLong_New(size_a + size_b);
@@ -3535,12 +3533,12 @@ x_mul(PyLongObject *a, PyLongObject *b)
          * via exploiting that each entry in the multiplication
          * pyramid appears twice (except for the size_a squares).
          */
-        digit *paend = a->long_value.ob_digit + size_a;
+        digit *paend = a->ob_digit + size_a;
         for (i = 0; i < size_a; ++i) {
             twodigits carry;
-            twodigits f = a->long_value.ob_digit[i];
+            twodigits f = a->ob_digit[i];
             digit *pz = z->long_value.ob_digit + (i << 1);
-            digit *pa = a->long_value.ob_digit + i + 1;
+            digit *pa = a->ob_digit + i + 1;
 
             SIGCHECK({
                     Py_DECREF(z);
@@ -3589,10 +3587,10 @@ x_mul(PyLongObject *a, PyLongObject *b)
     else {      /* a is not the same as b -- gradeschool int mult */
         for (i = 0; i < size_a; ++i) {
             twodigits carry = 0;
-            twodigits f = a->long_value.ob_digit[i];
+            twodigits f = a->ob_digit[i];
             digit *pz = z->long_value.ob_digit + i;
-            digit *pb = b->long_value.ob_digit;
-            digit *pbend = b->long_value.ob_digit + size_b;
+            digit *pb = b->ob_digit;
+            digit *pbend = b->ob_digit + size_b;
 
             SIGCHECK({
                     Py_DECREF(z);
@@ -3657,6 +3655,9 @@ static PyLongObject *k_lopsided_mul(PyLongObject *a, PyLongObject *b);
 static PyLongObject *
 k_mul(PyLongObject *a, PyLongObject *b)
 {
+    if (_PyLong_IsCompact(a) || _PyLong_IsCompact(b)) {
+        return (PyLongObject *)_PyLong_Multiply(a, b);
+    }
     Py_ssize_t asize = _PyLong_DigitCount(a);
     Py_ssize_t bsize = _PyLong_DigitCount(b);
     PyLongObject *ah = NULL;
@@ -3695,7 +3696,7 @@ k_mul(PyLongObject *a, PyLongObject *b)
         if (asize == 0)
             return (PyLongObject *)PyLong_FromLong(0);
         else
-            return x_mul(a, b);
+            return x_mul(&a->long_value, &b->long_value);
     }
 
     /* If a is small compared to b, splitting on b gives a degenerate
@@ -3780,7 +3781,7 @@ k_mul(PyLongObject *a, PyLongObject *b)
     _Py_DECREF_INT(t1);
 
     /* 6. t3 <- (ah+al)(bh+bl), and add into result. */
-    if ((t1 = x_add(ah, al)) == NULL) goto fail;
+    if ((t1 = (PyLongObject *)_PyLong_Add(ah, al)) == NULL) goto fail;
     _Py_DECREF_INT(ah);
     _Py_DECREF_INT(al);
     ah = al = NULL;
@@ -3788,7 +3789,7 @@ k_mul(PyLongObject *a, PyLongObject *b)
     if (a == b) {
         t2 = (PyLongObject*)Py_NewRef(t1);
     }
-    else if ((t2 = x_add(bh, bl)) == NULL) {
+    else if ((t2 = (PyLongObject *)_PyLong_Add(bh, bl)) == NULL) {
         Py_DECREF(t1);
         goto fail;
     }
@@ -3934,11 +3935,24 @@ _PyLong_Multiply(PyLongObject *a, PyLongObject *b)
 
     /* fast path for single-digit multiplication */
     if (_PyLong_BothAreCompact(a, b)) {
-        stwodigits v = medium_value(a) * medium_value(b);
-        return _PyLong_FromSTwoDigits(v);
+        stwodigits v = _PyLong_CompactValue(a) * _PyLong_CompactValue(b);
+        return PyLong_FromSsize_t(v);
     }
-
-    z = k_mul(a, b);
+    _PyLongValue3 tmp;
+    if (_PyLong_IsCompact(a) || _PyLong_IsCompact(b)) {
+        _PyLongValue *val_a = _PyLongValue_FromPyLong(a, &tmp);
+        _PyLongValue *val_b = _PyLongValue_FromPyLong(b, &tmp);
+        z = x_mul(val_a, val_b);
+        /* z must either be non-compact or zero. */
+        if (_PyLong_DigitCount(z) == 0) {
+            Py_DECREF(z);
+            return Py_NewRef(_PyLong_GetZero());
+        }
+        assert(!_PyLong_IsCompact(z));
+    }
+    else {
+        z = k_mul(a, b);
+    }
     /* Negate if exactly one of the inputs is negative. */
     if (!_PyLong_SameSign(a, b) && z) {
         _PyLong_Negate(&z);
@@ -4855,7 +4869,7 @@ long_invert(PyLongObject *v)
     /* Implement ~x as -(x+1) */
     PyLongObject *x;
     if (_PyLong_IsCompact(v))
-        return _PyLong_FromSTwoDigits(~medium_value(v));
+        return PyLong_FromSsize_t(~_PyLong_CompactValue(v));
     x = (PyLongObject *) long_add(v, (PyLongObject *)_PyLong_GetOne());
     if (x == NULL)
         return NULL;
@@ -4870,7 +4884,7 @@ long_neg(PyLongObject *v)
 {
     PyLongObject *z;
     if (_PyLong_IsCompact(v))
-        return _PyLong_FromSTwoDigits(-medium_value(v));
+        return PyLong_FromSsize_t(-_PyLong_CompactValue(v));
     z = (PyLongObject *)_PyLong_Copy(v);
     if (z != NULL)
         _PyLong_FlipSign(z);
@@ -4943,12 +4957,12 @@ long_rshift1(PyLongObject *a, Py_ssize_t wordshift, digit remshift)
 
     /* Fast path for small a. */
     if (_PyLong_IsCompact(a)) {
-        stwodigits m, x;
+        intptr_t m, x;
         digit shift;
-        m = medium_value(a);
+        m = _PyLong_CompactValue(a);
         shift = wordshift == 0 ? remshift : PyLong_SHIFT;
         x = m < 0 ? ~(~m >> shift) : m >> shift;
-        return _PyLong_FromSTwoDigits(x);
+        return PyLong_FromSsize_t(x);
     }
 
     a_negative = _PyLong_IsNegative(a);
@@ -5059,10 +5073,10 @@ long_lshift1(PyLongObject *a, Py_ssize_t wordshift, digit remshift)
     twodigits accum;
 
     if (wordshift == 0 && _PyLong_IsCompact(a)) {
-        stwodigits m = medium_value(a);
+        intptr_t m = _PyLong_CompactValue(a);
         // bypass undefined shift operator behavior
-        stwodigits x = m < 0 ? -(-m << remshift) : m << remshift;
-        return _PyLong_FromSTwoDigits(x);
+        intptr_t x = m < 0 ? -(-m << remshift) : m << remshift;
+        return PyLong_FromSsize_t(x);
     }
 
     oldsize = _PyLong_DigitCount(a);
@@ -5275,7 +5289,7 @@ long_and(PyObject *a, PyObject *b)
     PyLongObject *x = (PyLongObject*)a;
     PyLongObject *y = (PyLongObject*)b;
     if (_PyLong_IsCompact(x) && _PyLong_IsCompact(y)) {
-        return _PyLong_FromSTwoDigits(medium_value(x) & medium_value(y));
+        return PyLong_FromSsize_t(_PyLong_CompactValue(x) & _PyLong_CompactValue(y));
     }
     return long_bitwise(x, '&', y);
 }
@@ -5287,7 +5301,7 @@ long_xor(PyObject *a, PyObject *b)
     PyLongObject *x = (PyLongObject*)a;
     PyLongObject *y = (PyLongObject*)b;
     if (_PyLong_IsCompact(x) && _PyLong_IsCompact(y)) {
-        return _PyLong_FromSTwoDigits(medium_value(x) ^ medium_value(y));
+        return PyLong_FromSsize_t(_PyLong_CompactValue(x) ^ _PyLong_CompactValue(y));
     }
     return long_bitwise(x, '^', y);
 }
@@ -5299,7 +5313,7 @@ long_or(PyObject *a, PyObject *b)
     PyLongObject *x = (PyLongObject*)a;
     PyLongObject *y = (PyLongObject*)b;
     if (_PyLong_IsCompact(x) && _PyLong_IsCompact(y)) {
-        return _PyLong_FromSTwoDigits(medium_value(x) | medium_value(y));
+        return PyLong_FromSsize_t(_PyLong_CompactValue(x) | _PyLong_CompactValue(y));
     }
     return long_bitwise(x, '|', y);
 }

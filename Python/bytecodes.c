@@ -1877,8 +1877,6 @@ dummy_func(
             DEOPT_IF(!_PyLong_IsCompact((PyLongObject *)left), COMPARE_OP);
             DEOPT_IF(!_PyLong_IsCompact((PyLongObject *)right), COMPARE_OP);
             STAT_INC(COMPARE_OP, hit);
-            assert(_PyLong_DigitCount((PyLongObject *)left) <= 1 &&
-                   _PyLong_DigitCount((PyLongObject *)right) <= 1);
             Py_ssize_t ileft = _PyLong_CompactValue((PyLongObject *)left);
             Py_ssize_t iright = _PyLong_CompactValue((PyLongObject *)right);
             // 2 if <, 4 if >, 8 if ==; this matches the low 4 bits of the oparg

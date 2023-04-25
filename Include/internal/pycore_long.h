@@ -172,6 +172,12 @@ _PyLong_IsNegative(const PyLongObject *op)
 }
 
 static inline bool
+_PyLongValue_IsNegative(const _PyLongValue *lv)
+{
+    return (lv->lv_tag & SIGN_MASK) == SIGN_NEGATIVE;
+}
+
+static inline bool
 _PyLong_IsPositive(const PyLongObject *op)
 {
     return (op->long_value.lv_tag & SIGN_MASK) == 0;
@@ -181,7 +187,14 @@ static inline Py_ssize_t
 _PyLong_DigitCount(const PyLongObject *op)
 {
     assert(PyLong_Check(op));
+    //assert(!_PyLong_IsCompact(op));
     return op->long_value.lv_tag >> NON_SIZE_BITS;
+}
+
+static inline Py_ssize_t
+_PyLongValue_DigitCount(const _PyLongValue *lv)
+{
+    return lv->lv_tag >> NON_SIZE_BITS;
 }
 
 /* Equivalent to _PyLong_DigitCount(op) * _PyLong_NonCompactSign(op) */
@@ -256,6 +269,17 @@ _PyLong_FlipSign(PyLongObject *op) {
 
 #define _PyLong_FALSE_TAG TAG_FROM_SIGN_AND_SIZE(0, 0)
 #define _PyLong_TRUE_TAG TAG_FROM_SIGN_AND_SIZE(1, 1)
+
+typedef struct _PyLongValue3Struct {
+    uintptr_t tag; /* Number of digits, sign and flags */
+    digit digits[3];
+} _PyLongValue3Struct;
+
+typedef union _PyLongValue3 {
+    _PyLongValue3Struct s;
+    _PyLongValue v;
+} _PyLongValue3;
+
 
 #ifdef __cplusplus
 }
