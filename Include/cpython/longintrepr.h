@@ -86,7 +86,10 @@ typedef struct _PyLongValue {
 
 struct _longobject {
     PyObject_HEAD
-    _PyLongValue long_value;
+    union {
+        intptr_t compact_value;
+        _PyLongValue long_value;
+    };
 };
 
 PyAPI_FUNC(PyLongObject *) _PyLong_New(Py_ssize_t);

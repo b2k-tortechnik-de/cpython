@@ -79,6 +79,23 @@ get_small_int(sdigit ival)
     return (PyObject *)&_PyLong_SMALL_INTS[_PY_NSMALLNEGINTS + ival];
 }
 
+static PyObject *
+_PyLong_FromMedium(intptr_t x)
+{
+    assert(!IS_SMALL_INT(x));
+    assert(x >= (INTPTR_MIN >> NON_SIZE_BITS) &&
+           x <= (INTPTR_MAX >> NON_SIZE_BITS));
+    /* We could use a freelist here */
+    PyLongObject *v = PyObject_Malloc(offsetof(PyLongObject, compact_value) + sizeof(intptr_t));
+    if (v == NULL) {
+        PyErr_NoMemory();
+        return NULL;
+    }
+    _PyObject_Init((PyObject*)v, &PyLong_Type);
+    v->compact_value = x << NON_SIZE_BITS;
+    return (PyObject*)v;
+}
+
 static PyLongObject *
 maybe_small_long(PyLongObject *v)
 {
@@ -87,6 +104,11 @@ maybe_small_long(PyLongObject *v)
         if (IS_SMALL_INT(ival)) {
             _Py_DECREF_INT(v);
             return (PyLongObject *)get_small_int((sdigit)ival);
+        }
+        if (ival >= (INTPTR_MIN >> NON_SIZE_BITS) &&
+            ival <= (INTPTR_MAX >> NON_SIZE_BITS)) {
+            _Py_DECREF_INT(v);
+            return (PyLongObject *)_PyLong_FromMedium(ival);
         }
     }
     return v;
@@ -198,6 +220,9 @@ _PyLong_FromDigits(int negative, Py_ssize_t digit_count, digit *digits)
     if (digit_count == 0) {
         return (PyLongObject *)Py_NewRef(_PyLong_GetZero());
     }
+    if (digit_count == 1) {
+        return (PyLongObject *)PyLong_FromLong(digit_count * digits[0]);
+    }
     PyLongObject *result = _PyLong_New(digit_count);
     if (result == NULL) {
         PyErr_NoMemory();
@@ -221,23 +246,6 @@ _PyLong_Copy(PyLongObject *src)
     }
     Py_ssize_t size = _PyLong_DigitCount(src);
     return (PyObject *)_PyLong_FromDigits(_PyLong_IsNegative(src), size, src->long_value.ob_digit);
-}
-
-static PyObject *
-_PyLong_FromMedium(sdigit x)
-{
-    assert(!IS_SMALL_INT(x));
-    /* We could use a freelist here */
-    PyLongObject *v = PyObject_Malloc(sizeof(PyLongObject));
-    if (v == NULL) {
-        PyErr_NoMemory();
-        return NULL;
-    }
-    digit abs_x = x < 0 ? -x : x;
-    _PyLong_SetSignAndDigitCount(v, x<0?-1:1, 1);
-    _PyObject_Init((PyObject*)v, &PyLong_Type);
-    v->long_value.ob_digit[0] = abs_x;
-    return (PyObject*)v;
 }
 
 /* If a freshly-allocated int is already shared, it must
@@ -270,8 +278,9 @@ PyLong_FromLong(long ival)
     if (IS_SMALL_INT(ival)) {
         return get_small_int((sdigit)ival);
     }
-    if (-(long)PyLong_MASK <= ival && ival <= (long)PyLong_MASK) {
-        return _PyLong_FromMedium((sdigit)ival);
+    if (ival >= (INTPTR_MIN >> NON_SIZE_BITS) &&
+        ival <= (INTPTR_MAX >> NON_SIZE_BITS)) {
+        return _PyLong_FromMedium(ival);
     }
 
     /* Count digits (at least two - smaller cases were handled above). */
@@ -1119,8 +1128,9 @@ PyLong_FromLongLong(long long ival)
     if (IS_SMALL_INT(ival)) {
         return get_small_int((sdigit)ival);
     }
-    if (-(long long)PyLong_MASK <= ival && ival <= (long long)PyLong_MASK) {
-        return _PyLong_FromMedium((sdigit)ival);
+    if (ival >= (INTPTR_MIN >> NON_SIZE_BITS) &&
+        ival <= (INTPTR_MAX >> NON_SIZE_BITS)) {
+       return _PyLong_FromMedium(ival);
     }
 
     /* Count digits (at least two - smaller cases were handled above). */
@@ -1160,6 +1170,10 @@ PyLong_FromSsize_t(Py_ssize_t ival)
 
     if (IS_SMALL_INT(ival)) {
         return get_small_int((sdigit)ival);
+    }
+    if (ival >= (INTPTR_MIN >> NON_SIZE_BITS) &&
+        ival <= (INTPTR_MAX >> NON_SIZE_BITS)) {
+        return _PyLong_FromMedium(ival);
     }
 
     if (ival < 0) {
@@ -5169,6 +5183,9 @@ long_bitwise(PyLongObject *a,
     int nega, negb, negz;
     Py_ssize_t size_a, size_b, size_z, i;
     PyLongObject *z;
+    _PyLongValue3 tmp_a, tmp_b;
+    _PyLongValue *val_a = _PyLongValue_FromPyLong(a, &tmp_a);
+    _PyLongValue *val_b = _PyLongValue_FromPyLong(b, &tmp_b);
 
     /* Bitwise operations for negative numbers operate as though
        on a two's complement representation.  So convert arguments
@@ -5176,13 +5193,13 @@ long_bitwise(PyLongObject *a,
        result back to sign-magnitude at the end. */
 
     /* If a is negative, replace it by its two's complement. */
-    size_a = _PyLong_DigitCount(a);
-    nega = _PyLong_IsNegative(a);
+    size_a = _PyLongValue_DigitCount(val_a);
+    nega = _PyLongValue_IsNegative(val_a);
     if (nega) {
         z = _PyLong_New(size_a);
         if (z == NULL)
             return NULL;
-        v_complement(z->long_value.ob_digit, a->long_value.ob_digit, size_a);
+        v_complement(z->long_value.ob_digit, val_a->ob_digit, size_a);
         a = z;
     }
     else
@@ -5190,15 +5207,15 @@ long_bitwise(PyLongObject *a,
         Py_INCREF(a);
 
     /* Same for b. */
-    size_b = _PyLong_DigitCount(b);
-    negb = _PyLong_IsNegative(b);
+    size_b = _PyLongValue_DigitCount(val_b);
+    negb = _PyLongValue_IsNegative(val_b);
     if (negb) {
         z = _PyLong_New(size_b);
         if (z == NULL) {
             Py_DECREF(a);
             return NULL;
         }
-        v_complement(z->long_value.ob_digit, b->long_value.ob_digit, size_b);
+        v_complement(z->long_value.ob_digit, val_b->ob_digit, size_b);
         b = z;
     }
     else
@@ -5248,15 +5265,15 @@ long_bitwise(PyLongObject *a,
     switch(op) {
     case '&':
         for (i = 0; i < size_b; ++i)
-            z->long_value.ob_digit[i] = a->long_value.ob_digit[i] & b->long_value.ob_digit[i];
+            z->long_value.ob_digit[i] = val_a->ob_digit[i] & val_b->ob_digit[i];
         break;
     case '|':
         for (i = 0; i < size_b; ++i)
-            z->long_value.ob_digit[i] = a->long_value.ob_digit[i] | b->long_value.ob_digit[i];
+            z->long_value.ob_digit[i] = val_a->ob_digit[i] | val_b->ob_digit[i];
         break;
     case '^':
         for (i = 0; i < size_b; ++i)
-            z->long_value.ob_digit[i] = a->long_value.ob_digit[i] ^ b->long_value.ob_digit[i];
+            z->long_value.ob_digit[i] = val_a->ob_digit[i] ^ val_b->ob_digit[i];
         break;
     default:
         Py_UNREACHABLE();
@@ -5265,9 +5282,9 @@ long_bitwise(PyLongObject *a,
     /* Copy any remaining digits of a, inverting if necessary. */
     if (op == '^' && negb)
         for (; i < size_z; ++i)
-            z->long_value.ob_digit[i] = a->long_value.ob_digit[i] ^ PyLong_MASK;
+            z->long_value.ob_digit[i] = val_a->ob_digit[i] ^ PyLong_MASK;
     else if (i < size_z)
-        memcpy(&z->long_value.ob_digit[i], &a->long_value.ob_digit[i],
+        memcpy(&z->long_value.ob_digit[i], &val_a->ob_digit[i],
                (size_z-i)*sizeof(digit));
 
     /* Complement result if negative. */

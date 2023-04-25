@@ -181,6 +181,19 @@ w_long(long x, WFILE *p)
     w_byte((char)((x>>24) & 0xff), p);
 }
 
+static void
+w_long64(intptr_t x, WFILE *p)
+{
+    w_byte((char)( x      & 0xff), p);
+    w_byte((char)((x>> 8) & 0xff), p);
+    w_byte((char)((x>>16) & 0xff), p);
+    w_byte((char)((x>>24) & 0xff), p);
+    w_byte((char)((x>>32) & 0xff), p);
+    w_byte((char)((x>>40) & 0xff), p);
+    w_byte((char)((x>>48) & 0xff), p);
+    w_byte((char)((x>>56) & 0xff), p);
+}
+
 #define SIZE32_MAX  0x7FFFFFFF
 
 #if SIZEOF_SIZE_T > 4
@@ -232,12 +245,25 @@ w_PyLong(const PyLongObject *ob, char flag, WFILE *p)
     Py_ssize_t i, j, n, l;
     digit d;
 
-    W_TYPE(TYPE_LONG, p);
     if (_PyLong_IsZero(ob)) {
+        W_TYPE(TYPE_LONG, p);
         w_long((long)0, p);
         return;
     }
+    if (_PyLong_IsCompact(ob)) {
+        intptr_t val = _PyLong_CompactValue(ob);
+        if (((int32_t)val) == val) {
+            W_TYPE(TYPE_INT, p);
+            w_long(val, p);
+        }
+        else {
+            W_TYPE(TYPE_INT64, p);
+            w_long64(val, p);
+        }
+        return;
+    }
 
+    W_TYPE(TYPE_LONG, p);
     /* set l to number of base PyLong_MARSHAL_BASE digits */
     n = _PyLong_DigitCount(ob);
     l = (n-1) * PyLong_MARSHAL_RATIO;

@@ -113,8 +113,7 @@ PyAPI_FUNC(char*) _PyLong_FormatBytesWriter(
  * 2: Reserved for immortality bit
  * 3+ Unsigned digit count
  */
-#define SIGN_MASK 3
-#define SIGN_ZERO 1
+
 #define SIGN_NEGATIVE 2
 #define NON_SIZE_BITS 3
 
@@ -128,20 +127,21 @@ PyAPI_FUNC(char*) _PyLong_FormatBytesWriter(
 static inline int
 _PyLong_IsNonNegativeCompact(const PyLongObject* op) {
     assert(PyLong_Check(op));
-    return op->long_value.lv_tag <= (1 << NON_SIZE_BITS);
+    return (op->compact_value & 1) == 0 &&
+           op->compact_value >= 0;
 }
 
 static inline int
 _PyLong_IsCompact(const PyLongObject* op) {
     assert(PyLong_Check(op));
-    return op->long_value.lv_tag < (2 << NON_SIZE_BITS);
+    return (op->compact_value & 1) == 0;
 }
 
 static inline int
 _PyLong_BothAreCompact(const PyLongObject* a, const PyLongObject* b) {
     assert(PyLong_Check(a));
     assert(PyLong_Check(b));
-    return (a->long_value.lv_tag | b->long_value.lv_tag) < (2 << NON_SIZE_BITS);
+    return ((a->compact_value | b->compact_value) & 1) == 0;
 }
 
 /* Returns a *compact* value, iff `_PyLong_IsCompact` is true for `op`.
@@ -155,39 +155,45 @@ _PyLong_CompactValue(const PyLongObject *op)
 {
     assert(PyLong_Check(op));
     assert(_PyLong_IsCompact(op));
-    Py_ssize_t sign = 1 - (op->long_value.lv_tag & SIGN_MASK);
-    return sign * (Py_ssize_t)op->long_value.ob_digit[0];
+    return Py_ARITHMETIC_RIGHT_SHIFT(intptr_t, op->compact_value, NON_SIZE_BITS);
 }
 
 static inline bool
 _PyLong_IsZero(const PyLongObject *op)
 {
-    return (op->long_value.lv_tag & SIGN_MASK) == SIGN_ZERO;
+    return op->compact_value == 0;
 }
 
 static inline bool
 _PyLong_IsNegative(const PyLongObject *op)
 {
-    return (op->long_value.lv_tag & SIGN_MASK) == SIGN_NEGATIVE;
+    if (_PyLong_IsCompact(op)) {
+        return op->compact_value < 0;
+    }
+    return (op->long_value.lv_tag & SIGN_NEGATIVE) != 0;
 }
 
 static inline bool
 _PyLongValue_IsNegative(const _PyLongValue *lv)
 {
-    return (lv->lv_tag & SIGN_MASK) == SIGN_NEGATIVE;
+    return (lv->lv_tag & SIGN_NEGATIVE) != 0;
 }
 
 static inline bool
 _PyLong_IsPositive(const PyLongObject *op)
 {
-    return (op->long_value.lv_tag & SIGN_MASK) == 0;
+
+    if (_PyLong_IsCompact(op)) {
+        return op->compact_value > 0;
+    }
+    return (op->long_value.lv_tag & SIGN_NEGATIVE) == 0;
 }
 
 static inline Py_ssize_t
 _PyLong_DigitCount(const PyLongObject *op)
 {
     assert(PyLong_Check(op));
-    //assert(!_PyLong_IsCompact(op));
+    assert(!_PyLong_IsCompact(op));
     return op->long_value.lv_tag >> NON_SIZE_BITS;
 }
 
@@ -197,21 +203,27 @@ _PyLongValue_DigitCount(const _PyLongValue *lv)
     return lv->lv_tag >> NON_SIZE_BITS;
 }
 
-/* Equivalent to _PyLong_DigitCount(op) * _PyLong_NonCompactSign(op) */
-static inline Py_ssize_t
-_PyLong_SignedDigitCount(const PyLongObject *op)
-{
-    assert(PyLong_Check(op));
-    Py_ssize_t sign = 1 - (op->long_value.lv_tag & SIGN_MASK);
-    return sign * (Py_ssize_t)(op->long_value.lv_tag >> NON_SIZE_BITS);
-}
-
 static inline int
 _PyLong_CompactSign(const PyLongObject *op)
 {
     assert(PyLong_Check(op));
     assert(_PyLong_IsCompact(op));
-    return 1 - (op->long_value.lv_tag & SIGN_MASK);
+    if (op->compact_value < 0) {
+        return -1;
+    }
+    return op->compact_value > 0;
+}
+
+/* Equivalent to _PyLong_DigitCount(op) * _PyLong_NonCompactSign(op) */
+static inline Py_ssize_t
+_PyLong_SignedDigitCount(const PyLongObject *op)
+{
+    if (_PyLong_IsCompact(op)) {
+        return _PyLong_CompactSign(op);
+    }
+    assert(PyLong_Check(op));
+    Py_ssize_t sign = 1 - (op->long_value.lv_tag & SIGN_NEGATIVE);
+    return sign * (Py_ssize_t)(op->long_value.lv_tag >> NON_SIZE_BITS);
 }
 
 static inline int
@@ -219,39 +231,40 @@ _PyLong_NonCompactSign(const PyLongObject *op)
 {
     assert(PyLong_Check(op));
     assert(!_PyLong_IsCompact(op));
-    return 1 - (op->long_value.lv_tag & SIGN_MASK);
+    return 1 - (op->long_value.lv_tag & SIGN_NEGATIVE);
 }
 
 /* Do a and b have the same sign? */
 static inline int
 _PyLong_SameSign(const PyLongObject *a, const PyLongObject *b)
 {
-    return (a->long_value.lv_tag & SIGN_MASK) == (b->long_value.lv_tag & SIGN_MASK);
+    assert(!_PyLong_IsCompact(a));
+    assert(!_PyLong_IsCompact(b));
+    return (a->long_value.lv_tag & SIGN_NEGATIVE) == (b->long_value.lv_tag & SIGN_NEGATIVE);
 }
 
-#define TAG_FROM_SIGN_AND_SIZE(sign, size) ((1 - (sign)) | ((size) << NON_SIZE_BITS))
+#define TAG_FROM_SIGN_AND_SIZE(sign, size) ((1 - (sign)) | ((size) << NON_SIZE_BITS) | 1)
 
 static inline void
 _PyLong_SetSignAndDigitCount(PyLongObject *op, int sign, Py_ssize_t size)
 {
     assert(size >= 0);
-    assert(-1 <= sign && sign <= 1);
-    assert(sign != 0 || size == 0);
+    assert(sign != 0);
     op->long_value.lv_tag = TAG_FROM_SIGN_AND_SIZE(sign, (size_t)size);
 }
 
 static inline void
 _PyLong_SetDigitCount(PyLongObject *op, Py_ssize_t size)
 {
-    assert(size >= 0);
-    op->long_value.lv_tag = (((size_t)size) << NON_SIZE_BITS) | (op->long_value.lv_tag & SIGN_MASK);
+    op->long_value.lv_tag = (((size_t)size) << NON_SIZE_BITS) | (op->long_value.lv_tag & SIGN_NEGATIVE);
 }
 
 #define NON_SIZE_MASK ~((1 << NON_SIZE_BITS) - 1)
 
 static inline void
 _PyLong_FlipSign(PyLongObject *op) {
-    unsigned int flipped_sign = 2 - (op->long_value.lv_tag & SIGN_MASK);
+    assert(!_PyLong_IsCompact(op));
+    unsigned int flipped_sign = 2 - (op->long_value.lv_tag & SIGN_NEGATIVE);
     op->long_value.lv_tag &= NON_SIZE_MASK;
     op->long_value.lv_tag |= flipped_sign;
 }
@@ -259,16 +272,8 @@ _PyLong_FlipSign(PyLongObject *op) {
 #define _PyLong_DIGIT_INIT(val) \
     { \
         .ob_base = _PyObject_HEAD_INIT(&PyLong_Type) \
-        .long_value  = { \
-            .lv_tag = TAG_FROM_SIGN_AND_SIZE( \
-                (val) == 0 ? 0 : ((val) < 0 ? -1 : 1), \
-                (val) == 0 ? 0 : 1), \
-            { ((val) >= 0 ? (val) : -(val)) }, \
-        } \
+        .compact_value = ((val) << NON_SIZE_BITS) \
     }
-
-#define _PyLong_FALSE_TAG TAG_FROM_SIGN_AND_SIZE(0, 0)
-#define _PyLong_TRUE_TAG TAG_FROM_SIGN_AND_SIZE(1, 1)
 
 typedef struct _PyLongValue3Struct {
     uintptr_t tag; /* Number of digits, sign and flags */
