@@ -1,0 +1,4 @@
+Add two unstable API functions for Cython and similar tools to rapidly get
+the underlying machine integer for "small" Python ints. The functions are:
+``int PyUnstable_Int_IsCompact(const PyLongObject*)`` and ``intptr_t
+PyUnstable_Int_CompactValue(const PyLongObject*)``
