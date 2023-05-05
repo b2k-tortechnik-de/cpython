@@ -1297,6 +1297,7 @@ init_threadstate(PyThreadState *tstate,
     tstate->datastack_top = NULL;
     tstate->datastack_limit = NULL;
     tstate->what_event = -1;
+    tstate->last_traced_line = -1;
 
     tstate->_status.initialized = 1;
 }

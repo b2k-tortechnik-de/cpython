@@ -155,6 +155,7 @@ struct _ts {
        the trace/profile. */
     int tracing;
     int what_event; /* The event currently being monitored, if any. */
+    int last_traced_line;
 
     /* Pointer to current _PyCFrame in the C stack frame of the currently,
      * or most recently, executing _PyEval_EvalFrameDefault. */
