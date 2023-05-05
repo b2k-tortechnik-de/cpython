@@ -1265,7 +1265,6 @@ initialize_lines(PyCodeObject *code)
         line_data[i].line_delta = compute_line_delta(code, i, line);
         int length = instruction_length(code, i);
         switch (opcode) {
-            case END_ASYNC_FOR:
             case END_FOR:
             case END_SEND:
             case RESUME:
@@ -1281,21 +1280,11 @@ initialize_lines(PyCodeObject *code)
                 else {
                     line_data[i].original_opcode = 0;
                 }
-                if (line >= 0) {
-                    current_line = line;
-                }
+                current_line = line;
         }
         for (int j = 1; j < length; j++) {
             line_data[i+j].original_opcode = 0;
             line_data[i+j].line_delta = NO_LINE;
-        }
-        switch (opcode) {
-            case RETURN_VALUE:
-            case RAISE_VARARGS:
-            case RERAISE:
-                /* Blocks of code after these terminators
-                 * should be treated as different lines */
-                current_line = -1;
         }
         i += length;
     }
