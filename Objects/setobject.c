@@ -2155,6 +2155,7 @@ PyTypeObject PySet_Type = {
     set_new,                            /* tp_new */
     PyObject_GC_Del,                    /* tp_free */
     .tp_vectorcall = set_vectorcall,
+    .tp_flags_internal = _Py_TPFLAG_INTERNAL_SAFE_DECREF,
 };
 
 /* frozenset object ********************************************************/

@@ -14608,6 +14608,7 @@ PyTypeObject PyUnicode_Type = {
     0,                            /* tp_alloc */
     unicode_new,                  /* tp_new */
     PyObject_Del,                 /* tp_free */
+    .tp_flags_internal = _Py_TPFLAG_INTERNAL_DECREF_IS_FREE,
 };
 
 /* Initialize the Unicode implementation */

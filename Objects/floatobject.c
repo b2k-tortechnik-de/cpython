@@ -1924,6 +1924,7 @@ PyTypeObject PyFloat_Type = {
     0,                                          /* tp_alloc */
     float_new,                                  /* tp_new */
     .tp_vectorcall = (vectorcallfunc)float_vectorcall,
+    .tp_flags_internal = _Py_TPFLAG_INTERNAL_DECREF_IS_FREE,
 };
 
 static void

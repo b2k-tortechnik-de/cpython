@@ -2952,6 +2952,7 @@ PyTypeObject PyBytes_Type = {
     bytes_alloc,                                /* tp_alloc */
     bytes_new,                                  /* tp_new */
     PyObject_Del,                               /* tp_free */
+    .tp_flags_internal = _Py_TPFLAG_INTERNAL_DECREF_IS_FREE,
 };
 
 void

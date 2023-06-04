@@ -6289,6 +6289,7 @@ PyTypeObject PyLong_Type = {
     0,                                          /* tp_alloc */
     long_new,                                   /* tp_new */
     PyObject_Free,                              /* tp_free */
+    .tp_flags_internal = _Py_TPFLAG_INTERNAL_DECREF_IS_FREE,
 };
 
 static PyTypeObject Int_InfoType;

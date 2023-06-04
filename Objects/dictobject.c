@@ -3879,6 +3879,7 @@ PyTypeObject PyDict_Type = {
     dict_new,                                   /* tp_new */
     PyObject_GC_Del,                            /* tp_free */
     .tp_vectorcall = dict_vectorcall,
+    .tp_flags_internal = _Py_TPFLAG_INTERNAL_SAFE_DECREF,
 };
 
 /* For backward compatibility with old dictionary interface */

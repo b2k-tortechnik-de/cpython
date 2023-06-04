@@ -2560,7 +2560,6 @@ void
 _Py_Dealloc(PyObject *op)
 {
     PyTypeObject *type = Py_TYPE(op);
-    destructor dealloc = type->tp_dealloc;
 #ifdef Py_DEBUG
     PyThreadState *tstate = _PyThreadState_GET();
     PyObject *old_exc = tstate != NULL ? tstate->current_exception : NULL;
@@ -2574,7 +2573,15 @@ _Py_Dealloc(PyObject *op)
 #ifdef Py_TRACE_REFS
     _Py_ForgetReference(op);
 #endif
-    (*dealloc)(op);
+#ifdef Py_STATS
+    if (type->tp_flags_internal & _Py_TPFLAG_INTERNAL_DECREF_IS_FREE) {
+        OBJECT_STAT_INC(direct_frees);
+    }
+    else if (type->tp_flags_internal & _Py_TPFLAG_INTERNAL_SAFE_DECREF) {
+        OBJECT_STAT_INC(safe_decrefs);
+    }
+#endif
+    type->tp_dealloc(op);
 
 #ifdef Py_DEBUG
     // gh-89373: The tp_dealloc function must leave the current exception

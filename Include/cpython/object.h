@@ -225,6 +225,7 @@ struct _typeobject {
 
     destructor tp_finalize;
     vectorcallfunc tp_vectorcall;
+    uint32_t tp_flags_internal;
 
     /* bitset of which type-watchers care about this type */
     char tp_watched;

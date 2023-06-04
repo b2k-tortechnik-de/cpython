@@ -884,6 +884,7 @@ PyTypeObject PyTuple_Type = {
     tuple_new,                                  /* tp_new */
     PyObject_GC_Del,                            /* tp_free */
     .tp_vectorcall = tuple_vectorcall,
+    .tp_flags_internal = _Py_TPFLAG_INTERNAL_SAFE_DECREF,
 };
 
 /* The following function breaks the notion that tuples are immutable:

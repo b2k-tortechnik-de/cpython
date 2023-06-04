@@ -186,6 +186,8 @@ print_object_stats(FILE *out, ObjectStats *stats)
     fprintf(out, "Object interpreter decrefs: %" PRIu64 "\n", stats->interpreter_decrefs);
     fprintf(out, "Object increfs: %" PRIu64 "\n", stats->increfs);
     fprintf(out, "Object decrefs: %" PRIu64 "\n", stats->decrefs);
+    fprintf(out, "Object direct frees: %" PRIu64 "\n", stats->direct_frees);
+    fprintf(out, "Object safe decrefs: %" PRIu64 "\n", stats->safe_decrefs);
     fprintf(out, "Object materialize dict (on request): %" PRIu64 "\n", stats->dict_materialized_on_request);
     fprintf(out, "Object materialize dict (new key): %" PRIu64 "\n", stats->dict_materialized_new_key);
     fprintf(out, "Object materialize dict (too big): %" PRIu64 "\n", stats->dict_materialized_too_big);

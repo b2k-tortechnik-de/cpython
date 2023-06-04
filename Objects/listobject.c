@@ -3139,6 +3139,7 @@ PyTypeObject PyList_Type = {
     PyType_GenericNew,                          /* tp_new */
     PyObject_GC_Del,                            /* tp_free */
     .tp_vectorcall = list_vectorcall,
+    .tp_flags_internal = _Py_TPFLAG_INTERNAL_SAFE_DECREF,
 };
 
 /*********************** List Iterator **************************/

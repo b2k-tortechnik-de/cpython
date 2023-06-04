@@ -4,6 +4,7 @@
 #include "pycore_abstract.h"      // _PyIndex_Check()
 #include "pycore_range.h"
 #include "pycore_long.h"          // _PyLong_GetZero()
+#include "pycore_object.h"         // _Py_TPFLAG_INTERNAL_SAFE_DECREF
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "structmember.h"         // PyMemberDef
 
@@ -801,7 +802,8 @@ PyTypeObject PyRange_Type = {
         0,                      /* tp_init */
         0,                      /* tp_alloc */
         range_new,              /* tp_new */
-        .tp_vectorcall = (vectorcallfunc)range_vectorcall
+        .tp_vectorcall = (vectorcallfunc)range_vectorcall,
+        .tp_flags_internal = _Py_TPFLAG_INTERNAL_SAFE_DECREF,
 };
 
 /*********************** range Iterator **************************/
