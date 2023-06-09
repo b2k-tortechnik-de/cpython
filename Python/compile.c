@@ -7528,6 +7528,42 @@ insert_prefix_instructions(_PyCompile_CodeUnitMetadata *umd, basicblock *entrybl
 }
 
 static int
+count_locals(_PyCompile_CodeUnitMetadata *umd)
+{
+    PyObject *names = PySet_New(NULL);
+    if (names == NULL) {
+        return -1;
+    }
+    PyObject *name, *index;
+    Py_ssize_t pos = 0;
+    int count = 0;
+    PyObject *dicts[3] = {
+        umd->u_varnames,
+        umd->u_cellvars,
+        umd->u_freevars,
+    };
+    for (int i = 0; i < 3; i++) {
+        while (PyDict_Next(dicts[i], &pos, &name, &index)) {
+            int in = PySet_Contains(names, name);
+            if (in == 0) {
+                if (PySet_Add(names, name)) {
+                    goto fail;
+                }
+                count++;
+            }
+            else if (in < 0) {
+                goto fail;
+            }
+        }
+    }
+    Py_DECREF(names);
+    return count;
+fail:
+    Py_DECREF(names);
+    return -1;
+}
+
+static int
 fix_cell_offsets(_PyCompile_CodeUnitMetadata *umd, basicblock *entryblock, int *fixedmap)
 {
     int nlocals = (int)PyDict_GET_SIZE(umd->u_varnames);
@@ -7555,8 +7591,10 @@ fix_cell_offsets(_PyCompile_CodeUnitMetadata *umd, basicblock *entryblock, int *
             assert(inst->i_opcode != EXTENDED_ARG);
             int oldoffset = inst->i_oparg;
             switch(inst->i_opcode) {
-                case MAKE_CELL:
                 case LOAD_CLOSURE:
+                    inst->i_opcode = LOAD_FAST;
+                    /* fallthrough */
+                case MAKE_CELL:
                 case LOAD_DEREF:
                 case STORE_DEREF:
                 case DELETE_DEREF:
@@ -7642,17 +7680,17 @@ optimize_and_assemble_code_unit(struct compiler_unit *u, PyObject *const_cache,
     int nparams = (int)PyList_GET_SIZE(u->u_ste->ste_varnames);
     int nlocals = (int)PyDict_GET_SIZE(u->u_metadata.u_varnames);
     assert(u->u_metadata.u_firstlineno);
+    int nlocalsplus = prepare_localsplus(&u->u_metadata, &g, code_flags);
+    if (nlocalsplus < 0) {
+        goto error;
+    }
+
     if (_PyCfg_OptimizeCodeUnit(&g, consts, const_cache, code_flags, nlocals,
                                 nparams, u->u_metadata.u_firstlineno) < 0) {
         goto error;
     }
 
     /** Assembly **/
-    int nlocalsplus = prepare_localsplus(&u->u_metadata, &g, code_flags);
-    if (nlocalsplus < 0) {
-        goto error;
-    }
-
     int maxdepth = _PyCfg_Stackdepth(g.g_entryblock, code_flags);
     if (maxdepth < 0) {
         goto error;
@@ -8060,7 +8098,7 @@ _PyCompile_Assemble(_PyCompile_CodeUnitMetadata *umd, PyObject *filename,
     }
 
     int code_flags = 0;
-    int nlocalsplus = prepare_localsplus(umd, &g, code_flags);
+    int nlocalsplus = count_locals(umd);
     if (nlocalsplus < 0) {
         goto error;
     }

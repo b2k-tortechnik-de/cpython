@@ -178,6 +178,7 @@ dummy_func(
         inst(LOAD_CLOSURE, (-- value)) {
             /* We keep LOAD_CLOSURE so that the bytecode stays more readable. */
             value = GETLOCAL(oparg);
+            assert(value != NULL);
             ERROR_IF(value == NULL, unbound_local_error);
             Py_INCREF(value);
         }
@@ -189,6 +190,7 @@ dummy_func(
         }
 
         inst(LOAD_FAST, (-- value)) {
+            assert(oparg < frame->f_code->co_nlocalsplus);
             value = GETLOCAL(oparg);
             assert(value != NULL);
             Py_INCREF(value);
@@ -203,6 +205,8 @@ dummy_func(
         inst(LOAD_FAST_LOAD_FAST, ( -- value1, value2)) {
             uint32_t oparg1 = oparg >> 4;
             uint32_t oparg2 = oparg & 15;
+            assert(oparg1 < frame->f_code->co_nlocalsplus);
+            assert(oparg2 < frame->f_code->co_nlocalsplus);
             value1 = GETLOCAL(oparg1);
             value2 = GETLOCAL(oparg2);
             Py_INCREF(value1);
