@@ -115,6 +115,10 @@ take_ownership(PyFrameObject *f, _PyInterpreterFrame *frame)
     }
 }
 
+static const _PyInterpreterFrame cleared_frame = {
+    .owner = FRAME_CLEARED
+};
+
 void
 _PyFrame_ClearExceptCode(_PyInterpreterFrame *frame)
 {
@@ -133,6 +137,7 @@ _PyFrame_ClearExceptCode(_PyInterpreterFrame *frame)
             Py_DECREF(f);
             return;
         }
+        f->f_frame = (_PyInterpreterFrame *)&cleared_frame;
         Py_DECREF(f);
     }
     assert(frame->stacktop >= 0);
