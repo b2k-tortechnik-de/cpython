@@ -1080,6 +1080,43 @@ show_stats_each_generations(GCState *gcstate)
         buf, gc_list_size(&gcstate->permanent_generation.head));
 }
 
+static int
+move_if_reachable(PyObject *op, void *live)
+{
+    OBJECT_STAT_INC(object_visits);
+    if (_PyObject_IS_GC(op)) {
+        PyGC_Head *gc = AS_GC(op);
+        if (gc->_gc_next) {
+            gc_list_move(gc, live);
+        }
+    }
+    return 0;
+}
+
+static void
+scan_roots(PyGC_Head *live)
+{
+    _PyRuntimeState *runtime = &_PyRuntime;
+    HEAD_LOCK(runtime);
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    PyThreadState* ts = PyInterpreterState_ThreadHead(interp);
+    HEAD_UNLOCK(runtime);
+    while (ts) {
+        _PyInterpreterFrame *frame = ts->cframe->current_frame;
+        while (frame) {
+            if (frame->owner != FRAME_OWNED_BY_CSTACK) {
+                _PyFrame_Traverse(frame,
+                                move_if_reachable,
+                                live);
+            }
+            frame = frame->previous;
+        }
+        HEAD_LOCK(runtime);
+        ts = PyThreadState_Next(ts);
+        HEAD_UNLOCK(runtime);
+    }
+}
+
 /* Deduce which objects among "base" are unreachable from outside the list
    and move them to 'unreachable'. The process consist in the following steps:
 
@@ -1116,6 +1153,7 @@ deduce_unreachable(PyGC_Head *base, PyGC_Head *unreachable) {
      * set are taken into account).
      */
     update_refs(base);  // gc_prev is used for gc_refs
+
     subtract_refs(base);
 
     /* Leave everything reachable from outside base in base, and move
@@ -1248,9 +1286,14 @@ gc_collect_main(PyThreadState *tstate, int generation,
         old = young;
     validate_list(old, collecting_clear_unreachable_clear);
 
+    PyGC_Head live;
+    gc_list_init(&live);
+    scan_roots(&live);
+
     deduce_unreachable(young, &unreachable);
 
     untrack_tuples(young);
+    untrack_tuples(&live);
     /* Move reachable objects to next generation. */
     if (young != old) {
         if (generation == NUM_GENERATIONS - 2) {
@@ -1262,10 +1305,11 @@ gc_collect_main(PyThreadState *tstate, int generation,
         /* We only un-track dicts in full collections, to avoid quadratic
            dict build-up. See issue #14775. */
         untrack_dicts(young);
+        untrack_dicts(&live);
         gcstate->long_lived_pending = 0;
         gcstate->long_lived_total = gc_list_size(young);
     }
-
+    gc_list_merge(&live, old);
     /* All objects in unreachable are trash, but objects reachable from
      * legacy finalizers (e.g. tp_del) can't safely be deleted.
      */
